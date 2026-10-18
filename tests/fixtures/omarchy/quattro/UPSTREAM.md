@@ -40,3 +40,9 @@ hypr-keymap --check "$tmp/hyprland.lua"
 
 At this commit the snapshot produces 242 binds. A small number of conditional
 bindings can vary with installed commands and input-method state.
+
+Run the checked-in regression test from the repository root:
+
+```bash
+uv run python tests/omarchy_snapshot.py
+```
