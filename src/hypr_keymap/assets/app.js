@@ -183,6 +183,13 @@
         return bindings.filter((binding) => binding.key === target);
       }
 
+      function submapForEntryTarget(target) {
+        const found = data.submaps.filter((submap) =>
+          submap.entry_binding_ids.some((id) => bindingById.get(id)?.key === target),
+        );
+        return found.length === 1 ? found[0].name : null;
+      }
+
       function updateKeyboardHighlights() {
         const entryKeys = new Set();
         const entryModifiers = new Set();
@@ -238,7 +245,10 @@
               badge.textContent = count > 1 ? `+${count - 1}` : String(count);
             }
             if (!MODIFIERS.includes(target)) {
-              button.title = count
+              const entrySubmap = viewMode === "overview" ? submapForEntryTarget(target) : null;
+              button.title = entrySubmap
+                ? `${target}：双击进入 ${entrySubmap}`
+                : count
                 ? `${target}：${shown.map((binding) => binding.title || "未提供 description").join("；")}`
                 : `${target}：未绑定`;
             }
@@ -251,7 +261,7 @@
         const text = document.querySelector("#keyboard-filter-text");
         bar.hidden = viewMode === "all";
         if (viewMode === "overview") {
-          text.textContent = `SUBMAPS：高亮全部 ${data.submaps.length} 个 submap 的入口键`;
+          text.textContent = `SUBMAPS：高亮全部 ${data.submaps.length} 个入口键；双击主键可进入对应 submap`;
         } else if (viewMode === "search") {
           text.textContent = `搜索：匹配 ${searchResults.length} 个绑定`;
         } else if (viewMode === "submap") {
@@ -314,6 +324,14 @@
           ? `${definition.label}：${matches(target).map((binding) => binding.title || "未提供 description").join("；")}`
           : `${definition.label}：未绑定`;
         button.addEventListener("click", () => select(target));
+        button.addEventListener("dblclick", (event) => {
+          if (viewMode !== "overview") return;
+          const submap = submapForEntryTarget(target);
+          if (submap) {
+            event.preventDefault();
+            enterSubmapContent(submap);
+          }
+        });
         allButtons.push(button);
         return button;
       }
@@ -432,7 +450,7 @@
         const root = document.querySelector("#submap-index");
         const head = document.createElement("div");
         head.className = "submap-index-head";
-        head.innerHTML = `<span>SUBMAP 导航</span><span>${data.submaps.length} 个模式</span>`;
+        head.innerHTML = `<span>SUBMAP 导航</span><span>${data.submaps.length} 个模式 · 可滚动</span>`;
 
         const overview = document.createElement("button");
         overview.type = "button";
