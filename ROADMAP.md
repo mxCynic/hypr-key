@@ -81,6 +81,8 @@ diagnostic counts.
   dependency graph. No module graph visualization is currently shipped.
 - Keep the Omarchy fixture as an upstream configuration snapshot used for
   compatibility and regression testing.
+- Use `docs/ECOSYSTEM.md` as the maintained comparison and launch-positioning
+  record.
 - Do not translate binding descriptions; they remain exactly as configured.
 
 ## Known limitations
@@ -119,6 +121,7 @@ as a reproducible case study for community launch.
    - one main screenshot
    - the duplicate-diagnostics screenshot
    - issue #7561 and PR #8576 links
+   - the comparison in `docs/ECOSYSTEM.md`
    - clear wording that the stacked binds are intentional but expose a known
      reverse-cycling bug
 
