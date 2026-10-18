@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import sys
 import tempfile
+import webbrowser
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -15,6 +17,7 @@ sys.path.insert(0, str(PROJECT / "src"))
 
 from hypr_keymap.analysis import analyze, build_submap_index
 from hypr_keymap.extractor import extract_bindings
+from hypr_keymap.render import render_html
 
 
 def lua_bin_directory() -> str:
@@ -39,7 +42,31 @@ def prepare_config(root: Path) -> Path:
     return entry
 
 
+def default_output() -> Path:
+    cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return cache / "hypr-keymap" / "omarchy-quattro.html"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run the Omarchy snapshot regression and optionally generate HTML."
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help="write the generated HTML report to this path",
+    )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="generate the report and open it in the default browser",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     with tempfile.TemporaryDirectory(prefix="hypr-keymap-omarchy-") as temporary:
         root = Path(temporary)
         entry = prepare_config(root)
@@ -103,6 +130,18 @@ def main() -> int:
         f"{len(unknown_keys)} unknown-key warnings, "
         f"{len(missing_descriptions)} missing descriptions"
     )
+
+    if args.output or args.open:
+        output = (args.output or default_output()).expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_html(bindings, diagnostics, entry), encoding="utf-8")
+        print(f"HTML: {output}")
+        if args.open and not webbrowser.open(output.as_uri()):
+            print(
+                "hypr-keymap: could not open the report in a browser",
+                file=sys.stderr,
+            )
+            return 1
     return 0
 
 

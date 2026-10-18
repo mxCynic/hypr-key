@@ -230,3 +230,32 @@ Default tool environment:
 ```text
 ~/.local/share/uv/tools/hypr-keymap/
 ```
+
+## Omarchy compatibility fixture
+
+The repository includes an unmodified Omarchy Hyprland configuration snapshot
+pinned to commit `a6dcc31b6429fcf25e9e6bf90179f84c602cbf4e`. Its source,
+license, and reproduction notes are recorded in
+`tests/fixtures/omarchy/quattro/UPSTREAM.md`.
+
+Run the regression assertions:
+
+```bash
+uv run python tests/omarchy_snapshot.py
+```
+
+Generate the audit report and open it in the default browser:
+
+```bash
+uv run python tests/omarchy_snapshot.py --open
+```
+
+Choose an output path explicitly:
+
+```bash
+uv run python tests/omarchy_snapshot.py \
+  -o /tmp/omarchy-keymap.html --open
+```
+
+Without `--open`, the script performs the extraction and validation without
+writing HTML unless `--output` is provided.

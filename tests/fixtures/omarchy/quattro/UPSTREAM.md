@@ -46,3 +46,9 @@ Run the checked-in regression test from the repository root:
 ```bash
 uv run python tests/omarchy_snapshot.py
 ```
+
+Generate and open the HTML audit:
+
+```bash
+uv run python tests/omarchy_snapshot.py --open
+```
