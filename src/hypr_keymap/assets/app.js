@@ -82,6 +82,7 @@
       let activeSubmap = null;
       let searchQuery = "";
       let searchResults = [];
+      let rovingKeyTarget = defaultTarget;
 
       const targetFor = (id) => MOD_TARGETS[id] || id;
       const keyLabel = (binding) => binding.raw_key && binding.raw_key.startsWith("code:") ? binding.key : binding.key;
@@ -190,6 +191,56 @@
         return found.length === 1 ? found[0].name : null;
       }
 
+      function mainKeyButtons() {
+        return allButtons.filter((button) => button.classList.contains("key"));
+      }
+
+      function setRovingKey(target, focus = false) {
+        rovingKeyTarget = target;
+        mainKeyButtons().forEach((button) => {
+          const active = button.dataset.target === target;
+          button.tabIndex = active ? 0 : -1;
+          button.setAttribute("aria-selected", String(active));
+        });
+        if (focus) {
+          mainKeyButtons()
+            .find((button) => button.dataset.target === target)
+            ?.focus();
+        }
+      }
+
+      function navigateKeyGrid(current, direction) {
+        const currentRect = current.getBoundingClientRect();
+        const currentX = currentRect.left + currentRect.width / 2;
+        const currentY = currentRect.top + currentRect.height / 2;
+        const candidates = mainKeyButtons().filter((button) => {
+          if (button === current || button.classList.contains("is-context-dimmed")) {
+            return false;
+          }
+          const rect = button.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          if (direction === "left") return x < currentX - 1;
+          if (direction === "right") return x > currentX + 1;
+          if (direction === "up") return y < currentY - 1;
+          return y > currentY + 1;
+        });
+        const scored = candidates.map((button) => {
+          const rect = button.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const dx = Math.abs(x - currentX);
+          const dy = Math.abs(y - currentY);
+          const primary = direction === "left" || direction === "right" ? dx : dy;
+          const cross = direction === "left" || direction === "right" ? dy : dx;
+          return { button, score: primary + cross * 2.5 };
+        });
+        scored.sort((left, right) => left.score - right.score);
+        if (scored.length) {
+          setRovingKey(scored[0].button.dataset.target, true);
+        }
+      }
+
       function updateKeyboardHighlights() {
         const entryKeys = new Set();
         const entryModifiers = new Set();
@@ -214,6 +265,7 @@
             ? activeBindings().flatMap((binding) => binding.mods)
             : [],
         );
+        const activeMainTargets = [];
 
         allButtons.forEach((button) => {
           const target = button.dataset.target;
@@ -230,30 +282,65 @@
             viewMode !== "all" && !isEntry && !isMember,
           );
           if (button.classList.contains("key")) {
-            const shown = displayMatches(target);
+            if (viewMode === "all" || isEntry || isMember) {
+              activeMainTargets.push(target);
+            }
+            const modifierTarget = MODIFIERS.includes(target);
+            const shown = modifierTarget ? [] : displayMatches(target);
             const count = shown.length;
             const first = shown[0];
-            button.classList.toggle("has-binding", count > 0);
-            button.classList.toggle("has-duplicate", !MODIFIERS.includes(target) && duplicates(target));
+            const hasBinding = modifierTarget ? matches(target).length > 0 : count > 0;
+            button.classList.toggle("has-binding", hasBinding);
+            button.classList.toggle("has-duplicate", !modifierTarget && duplicates(target));
             const hint = button.querySelector(".key-hint");
             if (hint) {
-              hint.textContent = count > 0 ? (first?.short || "") : "";
+              hint.textContent = !modifierTarget && count > 0 ? (first?.short || "") : "";
             }
             const badge = button.querySelector(".count");
             if (badge) {
-              badge.hidden = count === 0;
+              badge.hidden = modifierTarget || count === 0;
               badge.textContent = count > 1 ? `+${count - 1}` : String(count);
             }
-            if (!MODIFIERS.includes(target)) {
+            if (!modifierTarget) {
               const entrySubmap = viewMode === "overview" ? submapForEntryTarget(target) : null;
+              const spokenKey = target === "SPACE" ? "Space" : target;
+              const descriptions = shown
+                .map((binding) => binding.title || "未提供 description")
+                .slice(0, 2)
+                .join("；");
+              const modeDescription = entrySubmap
+                ? `，Submap 入口，双击进入 ${entrySubmap}`
+                : viewMode === "submap"
+                  ? `，Submap ${activeSubmap} 成员`
+                  : "";
+              button.setAttribute(
+                "aria-label",
+                count > 0
+                  ? `${spokenKey}，${descriptions}${count > 2 ? `，另有 ${count - 2} 个组合` : ""}${modeDescription}`
+                  : `${spokenKey}，未绑定`,
+              );
               button.title = entrySubmap
                 ? `${target}：双击进入 ${entrySubmap}`
                 : count
                 ? `${target}：${shown.map((binding) => binding.title || "未提供 description").join("；")}`
                 : `${target}：未绑定`;
+            } else {
+              const modifierCount = matches(target).length;
+              button.setAttribute(
+                "aria-label",
+                `${MOD_LABELS[target] || target} 修饰键，参与 ${modifierCount} 个组合`,
+              );
             }
+          } else {
+            button.tabIndex = button.classList.contains("is-context-dimmed")
+              ? -1
+              : 0;
           }
         });
+        if (!activeMainTargets.includes(rovingKeyTarget)) {
+          rovingKeyTarget = activeMainTargets[0] || defaultTarget;
+        }
+        setRovingKey(rovingKeyTarget);
       }
 
       function updateModeBar() {
@@ -304,6 +391,9 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "key";
+        button.tabIndex = -1;
+        button.setAttribute("role", "gridcell");
+        button.setAttribute("aria-selected", "false");
         button.dataset.target = target;
         button.style.setProperty("--w", definition.width || 1);
         button.setAttribute("aria-label", definition.label);
@@ -320,10 +410,36 @@
         badge.hidden = count === 0;
         badge.textContent = count > 1 ? `+${count - 1}` : String(count);
         button.append(label, hint, badge);
-        button.title = count
-          ? `${definition.label}：${matches(target).map((binding) => binding.title || "未提供 description").join("；")}`
-          : `${definition.label}：未绑定`;
-        button.addEventListener("click", () => select(target));
+        button.title = MODIFIERS.includes(target)
+          ? `${definition.label} 修饰键，参与 ${matches(target).length} 个组合`
+          : count
+            ? `${definition.label}：${matches(target).map((binding) => binding.title || "未提供 description").join("；")}`
+            : `${definition.label}：未绑定`;
+        button.addEventListener("click", () => {
+          setRovingKey(target);
+          select(target);
+        });
+        button.addEventListener("focus", () => setRovingKey(target));
+        button.addEventListener("keydown", (event) => {
+          const directions = {
+            ArrowLeft: "left",
+            ArrowRight: "right",
+            ArrowUp: "up",
+            ArrowDown: "down",
+          };
+          const direction = directions[event.key];
+          if (direction) {
+            event.preventDefault();
+            navigateKeyGrid(button, direction);
+          } else if (event.key === "Home" || event.key === "End") {
+            event.preventDefault();
+            const active = mainKeyButtons().filter(
+              (item) => !item.classList.contains("is-context-dimmed"),
+            );
+            const destination = event.key === "Home" ? active[0] : active.at(-1);
+            if (destination) setRovingKey(destination.dataset.target, true);
+          }
+        });
         button.addEventListener("dblclick", (event) => {
           if (viewMode !== "overview") return;
           const submap = submapForEntryTarget(target);
@@ -339,18 +455,23 @@
       function renderKeyboard() {
         const body = document.createElement("div");
         body.className = "keyboard-body";
+        body.setAttribute("role", "rowgroup");
         const typing = document.createElement("div");
+        typing.setAttribute("role", "presentation");
         for (const row of rows) {
           const element = document.createElement("div");
           element.className = "key-row";
+          element.setAttribute("role", "row");
           row.forEach((definition) => element.append(makeKey(definition)));
           typing.append(element);
         }
         const nav = document.createElement("div");
         nav.className = "nav-area";
+        nav.setAttribute("role", "presentation");
         for (const row of navRows) {
           const element = document.createElement("div");
           element.className = "nav-row";
+          element.setAttribute("role", "row");
           row.forEach((definition) => {
             if (definition.spacer) {
               const spacer = document.createElement("span");
@@ -450,14 +571,14 @@
         const root = document.querySelector("#submap-index");
         const head = document.createElement("div");
         head.className = "submap-index-head";
-        head.innerHTML = `<span>SUBMAP 导航</span><span>${data.submaps.length} 个模式 · 可滚动</span>`;
+        head.innerHTML = `<span>SUBMAP 导航</span><span>${data.submaps.length} 个 submap</span>`;
 
         const overview = document.createElement("button");
         overview.type = "button";
         overview.className = "submap-overview-button";
         overview.disabled = data.submaps.length === 0;
         overview.innerHTML = `
-          <div><strong>查看全部 submap 入口</strong><span>保持完整键盘，同时高亮所有模式的进入键</span></div>
+          <div><strong>查看全部 submap 入口</strong><span>高亮全部入口键</span></div>
           <b>→</b>
         `;
         overview.addEventListener("click", enterSubmapOverview);
@@ -527,9 +648,59 @@
         return element;
       }
 
-      function bindingCard(binding) {
+      function focusSearchResult(card, offset) {
+        const cards = [...document.querySelectorAll("#binding-list .binding-card")];
+        const current = cards.indexOf(card);
+        if (current < 0 || !cards.length) return;
+        const next = offset === "first"
+          ? 0
+          : offset === "last"
+            ? cards.length - 1
+            : Math.max(0, Math.min(cards.length - 1, current + offset));
+        cards.forEach((item, index) => {
+          item.tabIndex = index === next ? 0 : -1;
+        });
+        cards[next].focus();
+      }
+
+      function bindingCard(binding, searchIndex = null) {
         const card = document.createElement("article");
         card.className = "binding-card";
+        if (searchIndex !== null) {
+          card.classList.add("search-result");
+          card.tabIndex = searchIndex === 0 ? 0 : -1;
+          card.setAttribute("role", "option");
+          card.setAttribute("aria-selected", String(searchIndex === 0));
+          const openResult = () => {
+            select(binding.key);
+            document.querySelector("#detail-title").focus();
+          };
+          card.addEventListener("click", openResult);
+          card.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              focusSearchResult(card, 1);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              focusSearchResult(card, -1);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              focusSearchResult(card, "first");
+            } else if (event.key === "End") {
+              event.preventDefault();
+              focusSearchResult(card, "last");
+            } else if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openResult();
+            }
+          });
+          card.addEventListener("focus", () => {
+            document.querySelectorAll("#binding-list .binding-card").forEach((item) => {
+              item.tabIndex = item === card ? 0 : -1;
+              item.setAttribute("aria-selected", String(item === card));
+            });
+          });
+        }
         card.classList.toggle("is-duplicate", binding.duplicate_group !== null);
         card.append(combo(binding));
 
@@ -619,6 +790,8 @@
       function renderDetail() {
         const list = document.querySelector("#binding-list");
         if (viewMode === "search" && searchQuery) {
+          list.setAttribute("role", "listbox");
+          list.setAttribute("aria-label", "搜索结果");
           document.querySelector("#selected-cap").textContent = "⌕";
           document.querySelector("#current-selection").textContent = "—";
           document.querySelector("#detail-title").textContent = "搜索结果";
@@ -632,13 +805,17 @@
             empty.innerHTML = `<div><strong>没有匹配的绑定。</strong>尝试更短的描述、按键名称或 flag。</div>`;
             list.append(empty);
           } else {
-            searchResults.forEach((binding) => list.append(bindingCard(binding)));
+            searchResults.forEach((binding, index) => {
+              list.append(bindingCard(binding, index));
+            });
           }
           updateStyles();
           updateKeyboardHighlights();
           updateModeBar();
           return;
         }
+        list.removeAttribute("role");
+        list.removeAttribute("aria-label");
         if (selectedTarget === null) {
           const overview = viewMode === "overview";
           document.querySelector("#selected-cap").textContent = overview ? "Σ" : "↓";
@@ -728,7 +905,7 @@
           applySearch("");
           searchInput.blur();
         } else if (event.key === "Enter" && searchResults.length) {
-          select(searchResults[0].key);
+          document.querySelector("#binding-list .binding-card")?.focus();
         }
       });
       document.querySelector("#search-clear").addEventListener("click", () => {

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-TOOL_VERSION = "1.5.1"
+TOOL_VERSION = "1.6.0"
 
 
 class HyprKeymapError(RuntimeError):

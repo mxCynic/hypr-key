@@ -57,7 +57,7 @@ __STYLE__
             <span class="case-label" id="case-label">HYPRLAND // KEYMAP</span>
             <span class="case-status"><i></i> GENERATED</span>
           </div>
-          <div class="keyboard-scroll"><div class="keyboard" id="keyboard"></div></div>
+          <div class="keyboard-scroll"><div class="keyboard" id="keyboard" role="grid" aria-label="Hyprland 键盘"></div></div>
           <div class="extra">
             <div class="extra-head"><span>系统功能键</span><span>媒体 / 亮度</span></div>
             <div class="extra-row" id="extra-keys"></div>
@@ -80,12 +80,11 @@ __STYLE__
           <div class="selected-cap" id="selected-cap">A</div>
           <div>
             <p class="detail-eyebrow" id="detail-eyebrow">按键组合</p>
-            <h2 id="detail-title">A</h2>
+            <h2 id="detail-title" tabindex="-1">A</h2>
             <p class="detail-subtitle" id="detail-subtitle">正在读取绑定…</p>
           </div>
         </div>
         <div class="binding-list" id="binding-list"></div>
-        <div class="detail-foot"><span>维护</span><p>新增 bind 时在 flags 表里写 description；未提供描述将保持为空。</p></div>
       </aside>
     </div>
 
