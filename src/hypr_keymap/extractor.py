@@ -18,18 +18,65 @@ def find_lua() -> str:
             return path
     raise HyprKeymapError("需要 Lua 解释器来读取 Hyprland Lua 配置；未找到 lua")
 
-def extract_bindings(path: Path) -> list[RawBinding]:
+def config_root_for(path: Path) -> Path:
+    return path.parent.parent if path.parent.name == "configs" else path.parent
+
+def default_module_roots(path: Path) -> list[Path]:
+    config_root = config_root_for(path)
+    roots = [config_root]
+
+    config_home = Path(
+        os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    ).expanduser()
+    try:
+        config_root.resolve().relative_to(config_home.resolve())
+    except ValueError:
+        pass
+    else:
+        roots.append(config_home)
+
+    omarchy_path = Path(
+        os.environ.get("OMARCHY_PATH") or "/usr/share/omarchy"
+    ).expanduser()
+    if omarchy_path.is_dir():
+        roots.append(omarchy_path)
+    return roots
+
+def normalize_module_roots(path: Path, module_roots: list[Path] | None) -> list[Path]:
+    roots = [config_root_for(path)]
+    if module_roots:
+        roots.extend(module_roots)
+    else:
+        roots = default_module_roots(path)
+
+    normalized: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        resolved = root.expanduser().resolve()
+        if resolved.is_dir() and resolved not in seen:
+            normalized.append(resolved)
+            seen.add(resolved)
+    return normalized
+
+def extract_bindings(
+    path: Path,
+    module_roots: list[Path] | None = None,
+) -> list[RawBinding]:
     lua = find_lua()
-    config_root = path.parent.parent if path.parent.name == "configs" else path.parent
+    roots = normalize_module_roots(path, module_roots)
     lua_files = sorted(
-        str(candidate.resolve())
-        for candidate in config_root.rglob("*.lua")
-        if candidate.is_file()
+        {
+            str(candidate.resolve())
+            for root in roots
+            for candidate in root.rglob("*.lua")
+            if candidate.is_file()
+        }
     )
     if any("\n" in candidate for candidate in lua_files):
         raise HyprKeymapError("Lua 配置路径中包含换行符，无法传给提取器")
     env = os.environ.copy()
     env["HYPR_KEYMAP_LUA_FILES"] = "\n".join(lua_files)
+    env["HYPR_KEYMAP_LUA_ROOTS"] = "\n".join(str(root) for root in roots)
     process = subprocess.run(
         [lua, "-", str(path)],
         input=LUA_EXTRACTOR,

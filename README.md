@@ -34,7 +34,20 @@ Supported import forms include:
 - Module return values and normal Lua `require` caching
 - Real source names and line numbers for every binding, such as `configs/binds.lua:20`
 
-To avoid executing modules outside the configuration tree, the extractor only loads Lua files discovered beneath the entry directory.
+To avoid executing arbitrary modules, the extractor only loads Lua files
+discovered beneath the configured module roots.
+
+For layouts such as Omarchy, where modules live under both `~/.config` and
+`OMARCHY_PATH`, additional roots can be supplied explicitly:
+
+```bash
+hypr-keymap ~/.config/hypr/hyprland.lua \
+  --module-root ~/.config \
+  --module-root /usr/share/omarchy
+```
+
+When the entry is under `XDG_CONFIG_HOME`, that directory is added
+automatically. `OMARCHY_PATH` is also used automatically when it exists.
 
 ### Interactive keyboard audit
 
@@ -243,6 +256,11 @@ Run the regression assertions:
 ```bash
 uv run python tests/omarchy_snapshot.py
 ```
+
+The snapshot keeps Omarchy's upstream layout. The test points directly at
+`config/hypr/hyprland.lua`, supplies `config` and `OMARCHY_PATH` as additional
+Lua module roots, and uses an isolated HOME. It does not copy or rewrite the
+configuration tree.
 
 Generate the audit report and open it in the default browser:
 

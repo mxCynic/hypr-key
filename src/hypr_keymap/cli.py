@@ -68,6 +68,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="HTML 输出路径；默认 ~/.cache/hypr-keymap/index.html，使用 - 输出到 stdout",
     )
     parser.add_argument(
+        "--module-root",
+        dest="module_roots",
+        action="append",
+        type=Path,
+        help="额外的 Lua 模块搜索根，可重复；用于 Omarchy 等多目录配置",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="只检查并输出诊断，不生成网页；发现错误时退出码为 1",
@@ -93,7 +100,7 @@ def default_output() -> Path:
 def _run(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     source = discover_config(args.config)
-    raw_bindings = extract_bindings(source)
+    raw_bindings = extract_bindings(source, args.module_roots)
     bindings, diagnostics = analyze(raw_bindings, source)
     errors = sum(issue.severity == "error" for issue in diagnostics)
 

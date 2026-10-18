@@ -19,23 +19,23 @@ Included paths:
 The files are downloaded directly from the pinned commit without modification.
 The upstream MIT license is preserved in [`LICENSE`](LICENSE).
 
-Omarchy splits its module roots between `config/hypr` and `default/hypr`.
-To reproduce the audit, create a temporary merged root:
+Omarchy splits its module roots between `config` and its `OMARCHY_PATH`
+checkout. Reproduce the audit against the original layout:
 
 ```bash
 snapshot="$PWD/tests/fixtures/omarchy/quattro"
-tmp="$(mktemp -d)"
-mkdir -p "$tmp/default"
-cp -a "$snapshot/config/hypr" "$tmp/hypr"
-cp -a "$snapshot/default/hypr" "$tmp/default/hypr"
-cp -a "$snapshot/default/omarchy" "$tmp/default/omarchy"
-cp "$snapshot/config/hypr/hyprland.lua" "$tmp/hyprland.lua"
+home="$(mktemp -d)"
+mkdir -p "$home/.local/state"
+ln -s "$snapshot/config" "$home/.config"
 
-HOME="$tmp/home" \
-XDG_CONFIG_HOME="$tmp/home/.config" \
-XDG_STATE_HOME="$tmp/home/.local/state" \
-OMARCHY_PATH="$tmp" \
-hypr-keymap --check "$tmp/hyprland.lua"
+HOME="$home" \
+XDG_CONFIG_HOME="$home/.config" \
+XDG_STATE_HOME="$home/.local/state" \
+OMARCHY_PATH="$snapshot" \
+hypr-keymap \
+  --module-root "$snapshot/config" \
+  --module-root "$snapshot" \
+  --check "$snapshot/config/hypr/hyprland.lua"
 ```
 
 At this commit the snapshot produces 242 binds. A small number of conditional

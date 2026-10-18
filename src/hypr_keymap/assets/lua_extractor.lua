@@ -38,6 +38,14 @@ local config_root = dirname(normalize_path(source_path))
 if basename(config_root) == "configs" then
   config_root = dirname(config_root)
 end
+local module_roots = {}
+local module_root_list = os.getenv("HYPR_KEYMAP_LUA_ROOTS") or ""
+for root in module_root_list:gmatch("[^\n]+") do
+  module_roots[#module_roots + 1] = normalize_path(root)
+end
+if #module_roots == 0 then
+  module_roots[1] = config_root
+end
 local allowed_files = {}
 local allowed_file_list = os.getenv("HYPR_KEYMAP_LUA_FILES") or ""
 for file in allowed_file_list:gmatch("[^\n]+") do
@@ -290,17 +298,8 @@ setmetatable(hl, {
 local module_cache = {}
 local loading_modules = {}
 
-local function resolve_module_path(name, from_path)
-  local base
+local function resolve_module_candidates(name, from_path)
   local absolute = name:sub(1, 1) == "/"
-  if absolute then
-    base = ""
-  elseif name:sub(1, 2) == "./" or name:sub(1, 3) == "../" then
-    base = dirname(from_path)
-  else
-    base = config_root
-  end
-
   local relative
   if name:match("%.lua$") then
     relative = name
@@ -311,9 +310,17 @@ local function resolve_module_path(name, from_path)
   end
 
   if absolute then
-    return normalize_path(relative)
+    return { normalize_path(relative) }
   end
-  return normalize_path(base .. "/" .. relative)
+  if name:sub(1, 2) == "./" or name:sub(1, 3) == "../" then
+    return { normalize_path(dirname(from_path) .. "/" .. relative) }
+  end
+
+  local candidates = {}
+  for _, root in ipairs(module_roots) do
+    candidates[#candidates + 1] = normalize_path(root .. "/" .. relative)
+  end
+  return candidates
 end
 
 local function glob_to_lua_pattern(pattern)
@@ -424,37 +431,41 @@ local function load_module_path(file_path)
 end
 
 require_module = function(name, from_path)
-  local resolved = resolve_module_path(name, from_path)
-  if resolved:find("[*?]") then
-    local cache_key = "glob:" .. resolved
-    if module_cache[cache_key] ~= nil then
-      return module_cache[cache_key]
-    end
-    local pattern = glob_to_lua_pattern(basename(resolved))
-    local directory = dirname(resolved)
-    local matches = {}
-    for _, file in ipairs(lua_files_in(directory)) do
-      if basename(file):match(pattern) then
-        matches[#matches + 1] = file
+  local candidates = resolve_module_candidates(name, from_path)
+  if candidates[1]:find("[*?]") then
+    for _, resolved in ipairs(candidates) do
+      local cache_key = "glob:" .. resolved
+      if module_cache[cache_key] ~= nil then
+        return module_cache[cache_key]
+      end
+
+      local pattern = glob_to_lua_pattern(basename(resolved))
+      local directory = dirname(resolved)
+      local matches = {}
+      for _, file in ipairs(lua_files_in(directory)) do
+        if basename(file):match(pattern) then
+          matches[#matches + 1] = file
+        end
+      end
+      if #matches > 0 then
+        local result = {}
+        for _, file in ipairs(matches) do
+          local module_name = basename(file):gsub("%.lua$", "")
+          result[module_name] = load_module_path(file)
+        end
+        module_cache[cache_key] = result
+        return result
       end
     end
-    if #matches == 0 then
-      error("required glob matched no Lua files: " .. name .. " (" .. resolved .. ")", 0)
-    end
-
-    local result = {}
-    for _, file in ipairs(matches) do
-      local module_name = basename(file):gsub("%.lua$", "")
-      result[module_name] = load_module_path(file)
-    end
-    module_cache[cache_key] = result
-    return result
+    error("required glob matched no Lua files: " .. name, 0)
   end
 
-  if not allowed_files[resolved] then
-    error("required Lua module was not found under the config root: " .. name, 0)
+  for _, resolved in ipairs(candidates) do
+    if allowed_files[resolved] then
+      return load_module_path(resolved)
+    end
   end
-  return load_module_path(resolved)
+  error("required Lua module was not found under the configured module roots: " .. name, 0)
 end
 
 local ok, run_error = pcall(load_module_path, normalize_path(source_path))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from datetime import datetime
 from importlib.resources import files
@@ -21,7 +22,18 @@ def render_html(
     diagnostics: list[Diagnostic],
     source: Path,
 ) -> str:
-    source_root = source.resolve().parent
+    source_directories = [source.resolve().parent]
+    source_directories.extend(
+        Path(binding.source).resolve().parent
+        for binding in bindings
+        if binding.source
+    )
+    try:
+        source_root = Path(
+            os.path.commonpath(str(directory) for directory in source_directories)
+        )
+    except ValueError:
+        source_root = source.resolve().parent
 
     def display_source(value: str) -> str:
         try:

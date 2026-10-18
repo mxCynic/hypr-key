@@ -28,18 +28,12 @@ def lua_bin_directory() -> str:
     raise RuntimeError("no Lua interpreter found")
 
 
-def prepare_config(root: Path) -> Path:
-    merged = root / "merged"
-    default = merged / "default"
-    default.mkdir(parents=True)
-
-    shutil.copytree(SNAPSHOT / "config" / "hypr", merged / "hypr")
-    shutil.copytree(SNAPSHOT / "default" / "hypr", default / "hypr")
-    shutil.copytree(SNAPSHOT / "default" / "omarchy", default / "omarchy")
-
-    entry = merged / "hyprland.lua"
-    shutil.copy2(SNAPSHOT / "config" / "hypr" / "hyprland.lua", entry)
-    return entry
+def prepare_environment(root: Path) -> tuple[Path, Path]:
+    home = root / "home"
+    (home / ".local" / "state").mkdir(parents=True)
+    (home / ".config").symlink_to(SNAPSHOT / "config", target_is_directory=True)
+    entry = SNAPSHOT / "config" / "hypr" / "hyprland.lua"
+    return entry, home
 
 
 def default_output() -> Path:
@@ -69,19 +63,24 @@ def main() -> int:
     args = parse_args()
     with tempfile.TemporaryDirectory(prefix="hypr-keymap-omarchy-") as temporary:
         root = Path(temporary)
-        entry = prepare_config(root)
-        home = root / "home"
+        entry, home = prepare_environment(root)
         overrides = {
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(home / ".config"),
             "XDG_STATE_HOME": str(home / ".local" / "state"),
-            "OMARCHY_PATH": str(root / "merged"),
+            "OMARCHY_PATH": str(SNAPSHOT),
             "PATH": f"{lua_bin_directory()}:/usr/bin:/bin",
         }
         previous = {key: os.environ.get(key) for key in overrides}
         try:
             os.environ.update(overrides)
-            bindings, diagnostics = analyze(extract_bindings(entry), entry)
+            bindings, diagnostics = analyze(
+                extract_bindings(
+                    entry,
+                    module_roots=[SNAPSHOT / "config", SNAPSHOT],
+                ),
+                entry,
+            )
         finally:
             for key, value in previous.items():
                 if value is None:
