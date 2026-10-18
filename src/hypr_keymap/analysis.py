@@ -144,6 +144,7 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                     f"第 {raw.line} 行包含未知 flag {name!r}，请确认拼写和 Hyprland 版本。",
                     key=key,
                     binding_ids=[raw.index],
+                    params={"name": name, "line": raw.line},
                 )
             )
             continue
@@ -156,6 +157,12 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                     f"第 {raw.line} 行的 {name} 应为 boolean，实际为 {type(value).__name__}。",
                     key=key,
                     binding_ids=[raw.index],
+                    params={
+                        "name": name,
+                        "line": raw.line,
+                        "expected": "boolean",
+                        "actual": type(value).__name__,
+                    },
                 )
             )
         if name in STRING_BIND_FLAGS and not isinstance(value, str):
@@ -167,6 +174,12 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                     f"第 {raw.line} 行的 {name} 应为 string，实际为 {type(value).__name__}。",
                     key=key,
                     binding_ids=[raw.index],
+                    params={
+                        "name": name,
+                        "line": raw.line,
+                        "expected": "string",
+                        "actual": type(value).__name__,
+                    },
                 )
             )
 
@@ -181,6 +194,11 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                     f"第 {raw.line} 行的 device 应为 table。",
                     key=key,
                     binding_ids=[raw.index],
+                    params={
+                        "field": "device",
+                        "line": raw.line,
+                        "expected": "table",
+                    },
                 )
             )
         else:
@@ -196,6 +214,11 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                         f"第 {raw.line} 行的 device.list 应为字符串数组。",
                         key=key,
                         binding_ids=[raw.index],
+                        params={
+                            "field": "device.list",
+                            "line": raw.line,
+                            "expected": "list of strings",
+                        },
                     )
                 )
             if "inclusive" in device and not isinstance(device["inclusive"], bool):
@@ -207,6 +230,11 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                         f"第 {raw.line} 行的 device.inclusive 应为 boolean。",
                         key=key,
                         binding_ids=[raw.index],
+                        params={
+                            "field": "device.inclusive",
+                            "line": raw.line,
+                            "expected": "boolean",
+                        },
                     )
                 )
 
@@ -225,6 +253,7 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                 f"第 {raw.line} 行同时设置了不同的 description 和 desc；Hyprland 使用 description。",
                 key=key,
                 binding_ids=[raw.index],
+                params={"line": raw.line},
             )
         )
 
@@ -237,6 +266,7 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                 f"第 {raw.line} 行同时设置 click 和 drag，松开时的触发条件相互冲突。",
                 key=key,
                 binding_ids=[raw.index],
+                params={"line": raw.line, "kind": "click-drag"},
             )
         )
     if raw.options.get("release") and (
@@ -250,6 +280,7 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                 f"第 {raw.line} 行设置了 release 和 click/drag；click/drag 本身就在松开时触发。",
                 key=key,
                 binding_ids=[raw.index],
+                params={"line": raw.line},
             )
         )
     if raw.options.get("long_press") and (
@@ -263,6 +294,7 @@ def validate_flags(raw: RawBinding, key: str) -> list[Diagnostic]:
                 f"第 {raw.line} 行同时设置长按和鼠标点击/拖动触发，实际优先级可能不符合预期。",
                 key=key,
                 binding_ids=[raw.index],
+                params={"line": raw.line, "kind": "long-press-click-drag"},
             )
         )
     return issues
@@ -282,6 +314,7 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     "无法解析键位",
                     str(exc),
                     binding_ids=[raw.index],
+                    params={"raw_key": raw.key_raw},
                 )
             )
             continue
@@ -299,6 +332,11 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     ),
                     key=key,
                     binding_ids=[raw.index],
+                    params={
+                        "line": raw.line,
+                        "raw_key": raw.key_raw,
+                        "options_type": raw.options_type,
+                    },
                 )
             )
 
@@ -376,6 +414,19 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                 f"同一作用域、触发阶段和按键组合被绑定 {len(group)} 次。{details}",
                 key=group[0].key,
                 binding_ids=[binding.id for binding in group],
+                params={
+                    "combo": combo,
+                    "context": context,
+                    "trigger": trigger,
+                    "count": len(group),
+                    "entries": [
+                        {
+                            "line": binding.line,
+                            "description": binding.title,
+                        }
+                        for binding in group
+                    ],
+                },
             )
         )
 
@@ -397,18 +448,22 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                 continue
 
             reasons: list[str] = []
+            reason_codes: list[str] = []
             if left.mods != right.mods and (
                 left.options.get("ignore_mods")
                 or right.options.get("ignore_mods")
             ):
                 reasons.append("ignore_mods 使修饰键范围重叠")
+                reason_codes.append("ignore_mods")
             if (
                 not (left.submap_universal and right.submap_universal)
                 and (left.submap_universal or right.submap_universal)
             ):
                 reasons.append("submap_universal 使作用域重叠")
+                reason_codes.append("submap_universal")
             if left.device_signature != right.device_signature:
                 reasons.append("device 范围重叠")
+                reason_codes.append("device")
             if not reasons:
                 continue
 
@@ -423,6 +478,13 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     ),
                     key=left.key,
                     binding_ids=[left.id, right.id],
+                    params={
+                        "combo": left.combo,
+                        "left_line": left.line,
+                        "right_line": right.line,
+                        "trigger": left.trigger_label,
+                        "reasons": reason_codes,
+                    },
                 )
             )
 
@@ -436,6 +498,7 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     f"第 {binding.line} 行的绑定调用了 set_enabled(false)。",
                     key=binding.key,
                     binding_ids=[binding.id],
+                    params={"combo": binding.combo, "line": binding.line},
                 )
             )
         if len(binding.mods_raw) != len(set(map(normalize_modifier, binding.mods_raw))):
@@ -447,6 +510,7 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     f"第 {binding.line} 行包含重复的修饰键，Hyprland 可能忽略重复项。",
                     key=binding.key,
                     binding_ids=[binding.id],
+                    params={"raw_key": binding.key_raw, "line": binding.line},
                 )
             )
         if binding.key not in NAMED_KEYS and not binding.key.startswith("CODE:"):
@@ -458,6 +522,7 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     "这个键名不在内置的常见键盘键列表中，请确认拼写和当前 Hyprland 版本支持。",
                     key=binding.key,
                     binding_ids=[binding.id],
+                    params={"raw_key": binding.key_raw, "line": binding.line},
                 )
             )
 

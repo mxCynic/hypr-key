@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hyprland 键位审计</title>
+  <title>Hyprland Keymap Audit</title>
   <style>
 __STYLE__
   </style>
@@ -13,96 +13,101 @@ __STYLE__
     <header class="hero">
       <div>
         <p class="eyebrow">HYPRLAND / BIND AUDIT</p>
-        <h1>键位审计</h1>
-        <p class="intro">描述只读取 Hyprland 原生 flags 中的 <code>{ description = "功能说明" }</code>。没有描述时不会推断功能，只显示真实动作、命令和行号。</p>
+        <h1 data-i18n="hero.title">Keymap Audit</h1>
+        <p class="intro" data-i18n="hero.intro">Descriptions come only from Hyprland's native flags. Missing descriptions stay empty; actions, commands and source lines remain visible.</p>
       </div>
-      <div class="source-note">
-        <span class="source-dot"></span>
-        <div>
-          <strong>配置来源</strong>
-          <code id="source-path">—</code>
+      <div class="header-side">
+        <div class="language-switch" role="group" aria-label="Language" data-i18n-aria-label="language.label">
+          <button type="button" data-lang="en" lang="en" class="is-active" aria-pressed="true">EN</button>
+          <button type="button" data-lang="zh" lang="zh" aria-pressed="false">中文</button>
+        </div>
+        <div class="source-note">
+          <span class="source-dot"></span>
+          <div>
+            <strong data-i18n="source.label">Configuration source</strong>
+            <code id="source-path">—</code>
+          </div>
         </div>
       </div>
     </header>
 
-    <section class="stats" aria-label="绑定概览">
-      <div class="stat"><strong id="stat-bindings">—</strong><span>个绑定</span></div>
-      <div class="stat"><strong id="stat-keys">—</strong><span>个触发键</span></div>
-      <div class="stat" id="stat-duplicate-wrap"><strong id="stat-duplicates">—</strong><span>组重复</span></div>
-      <div class="stat" id="stat-warning-wrap"><strong id="stat-warnings">—</strong><span>个警告</span></div>
+    <section class="stats" aria-label="Binding overview" data-i18n-aria-label="stats.aria">
+      <div class="stat"><strong id="stat-bindings">—</strong><span data-i18n="stats.bindings">bindings</span></div>
+      <div class="stat"><strong id="stat-keys">—</strong><span data-i18n="stats.keys">trigger keys</span></div>
+      <div class="stat" id="stat-duplicate-wrap"><strong id="stat-duplicates">—</strong><span data-i18n="stats.duplicates">duplicate groups</span></div>
+      <div class="stat" id="stat-warning-wrap"><strong id="stat-warnings">—</strong><span data-i18n="stats.warnings">warnings</span></div>
       <p class="generated" id="generated-at"></p>
     </section>
 
     <div class="main-grid">
       <section class="panel keyboard-panel">
         <div class="panel-head">
-          <div><p class="kicker">ANSI / KEYMAP</p><h2>点击一个按键</h2></div>
-          <p class="current">当前选择<strong id="current-selection">A</strong></p>
+          <div><p class="kicker">ANSI / KEYMAP</p><h2 data-i18n="panel.selectKey">Select a key</h2></div>
+          <p class="current"><span data-i18n="panel.current">Current</span><strong id="current-selection">A</strong></p>
         </div>
         <div class="search-area">
           <div class="search-toolbar">
             <label class="search-box">
-              <span>搜索</span>
-              <input id="bind-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" aria-haspopup="listbox" placeholder="描述、组合键、命令、submap、flags" autocomplete="off">
+              <span data-i18n="search.label">Search</span>
+              <input id="bind-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" aria-haspopup="listbox" placeholder="Description, chord, command, submap, flags" autocomplete="off" data-i18n-placeholder="search.placeholder">
             </label>
-            <button type="button" id="search-clear" hidden>清除</button>
+            <button type="button" id="search-clear" hidden data-i18n="search.clear">Clear</button>
             <span class="search-count" id="search-count"></span>
           </div>
           <div class="search-popover" id="search-popover" hidden>
             <div class="search-popover-head">
-              <span>匹配结果</span>
+              <span data-i18n="search.matches">Matches</span>
               <span id="search-popover-count"></span>
-              <button type="button" id="search-popover-close" aria-label="关闭搜索结果">Esc</button>
+              <button type="button" id="search-popover-close" aria-label="Close search results" data-i18n-aria-label="search.close">Esc</button>
             </div>
-            <div id="search-results" role="listbox" aria-label="搜索匹配结果"></div>
+            <div id="search-results" role="listbox" aria-label="Search results" data-i18n-aria-label="search.resultsAria"></div>
           </div>
-          <div class="search-filters" id="search-filters" aria-label="搜索筛选">
-            <button type="button" class="search-filter is-active" data-filter="all">全部</button>
-            <button type="button" class="search-filter" data-filter="global">全局</button>
-            <button type="button" class="search-filter" data-filter="submap">当前 submap</button>
-            <button type="button" class="search-filter" data-filter="flags">有 flags</button>
-            <button type="button" class="search-filter" data-filter="duplicates">重复项</button>
-            <button type="button" class="search-filter" data-filter="keyboard">键盘</button>
-            <button type="button" class="search-filter" data-filter="mouse">鼠标</button>
+          <div class="search-filters" id="search-filters" aria-label="Search filters" data-i18n-aria-label="search.filtersAria">
+            <button type="button" class="search-filter is-active" data-filter="all" data-i18n="filter.all">All</button>
+            <button type="button" class="search-filter" data-filter="global" data-i18n="filter.global">Global</button>
+            <button type="button" class="search-filter" data-filter="submap" data-i18n="filter.submap">Current submap</button>
+            <button type="button" class="search-filter" data-filter="flags" data-i18n="filter.flags">Has flags</button>
+            <button type="button" class="search-filter" data-filter="duplicates" data-i18n="filter.duplicates">Duplicates</button>
+            <button type="button" class="search-filter" data-filter="keyboard" data-i18n="filter.keyboard">Keyboard</button>
+            <button type="button" class="search-filter" data-filter="mouse" data-i18n="filter.mouse">Mouse</button>
           </div>
         </div>
         <div class="submap-index" id="submap-index"></div>
         <div class="keyboard-filter" id="keyboard-filter" hidden>
           <span id="keyboard-filter-text"></span>
-          <button type="button" id="keyboard-filter-back">返回全局</button>
+          <button type="button" id="keyboard-filter-back" data-i18n="mode.back">Back to global</button>
         </div>
         <div class="keyboard-case">
           <div class="case-top">
             <span class="case-label" id="case-label">HYPRLAND // KEYMAP</span>
-            <span class="case-status"><i></i> GENERATED</span>
+            <span class="case-status"><i></i> <span data-i18n="case.generated">GENERATED</span></span>
           </div>
-          <div class="keyboard-scroll"><div class="keyboard" id="keyboard" role="grid" aria-label="Hyprland 键盘"></div></div>
-          <p class="keyboard-overflow-hint" id="keyboard-overflow-hint" hidden>当前宽度不足，可横向滚动查看完整键盘</p>
+          <div class="keyboard-scroll"><div class="keyboard" id="keyboard" role="grid" aria-label="Hyprland keyboard" data-i18n-aria-label="keyboard.aria"></div></div>
+          <p class="keyboard-overflow-hint" id="keyboard-overflow-hint" hidden data-i18n="keyboard.overflow">Keyboard exceeds the available width; scroll horizontally to see the full layout</p>
           <div class="extra">
-            <div class="extra-head"><span>系统功能键</span><span>媒体 / 亮度</span></div>
+            <div class="extra-head"><span data-i18n="extra.system">System keys</span><span data-i18n="extra.media">Media / brightness</span></div>
             <div class="extra-row" id="extra-keys"></div>
             <div class="mouse-row" id="mouse-keys"></div>
           </div>
         </div>
         <p class="legend">
-          <span class="chip bound"></span>已绑定
-          <span class="chip mod"></span>组合需要此修饰键
-          <span class="chip sel"></span>当前查看
-          <span class="chip bug"></span>存在重复
-          <span class="chip entry"></span>Submap 入口
-          <span class="chip member"></span>Submap 按键
+          <span class="chip bound"></span><span data-i18n="legend.bound">Bound</span>
+          <span class="chip mod"></span><span data-i18n="legend.modifiers">Modifier required</span>
+          <span class="chip sel"></span><span data-i18n="legend.selected">Selected</span>
+          <span class="chip bug"></span><span data-i18n="legend.duplicate">Duplicate</span>
+          <span class="chip entry"></span><span data-i18n="legend.entry">Submap entry / exit</span>
         </p>
       </section>
 
       <aside class="panel detail">
-        <div class="detail-topline"><span>SELECTED KEY</span><span id="detail-count">—</span></div>
+        <div class="detail-topline"><span data-i18n="detail.label">SELECTED KEY</span><span id="detail-count">—</span></div>
         <p class="sr-only" id="detail-live" aria-live="polite" aria-atomic="true"></p>
         <div class="selected-head">
           <div class="selected-cap" id="selected-cap">A</div>
           <div>
-            <p class="detail-eyebrow" id="detail-eyebrow">按键组合</p>
+            <p class="detail-eyebrow" id="detail-eyebrow" data-i18n="detail.combination">Key combination</p>
             <h2 id="detail-title" tabindex="-1">A</h2>
-            <p class="detail-subtitle" id="detail-subtitle">正在读取绑定…</p>
+            <p class="detail-subtitle" id="detail-subtitle" data-i18n="detail.loading">Reading bindings…</p>
           </div>
         </div>
         <div class="binding-list" id="binding-list"></div>
@@ -111,14 +116,17 @@ __STYLE__
 
     <details class="diagnostics" id="diagnostics-panel">
       <summary class="diagnostics-summary-row">
-        <span id="diagnostics-title">配置诊断</span>
-        <span class="diagnostics-summary" id="diagnostics-summary"></span>
+        <span id="diagnostics-title" data-i18n="diagnostics.title">Configuration diagnostics</span>
+        <span class="diagnostics-head-side"><span class="diagnostics-summary" id="diagnostics-summary"></span><span class="diagnostics-state" id="diagnostics-state" data-i18n="diagnostics.open">Open</span></span>
       </summary>
       <div id="diagnostics-list"></div>
     </details>
   </main>
 
   <script id="bind-data" type="application/json">__PAYLOAD__</script>
+  <script>
+__I18N__
+  </script>
   <script>
 __SCRIPT__
   </script>

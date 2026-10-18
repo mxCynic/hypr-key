@@ -44,3 +44,14 @@ Baseline: 163 bindings, 14 submaps, 641 DOM nodes.
 | 9 | URL/hash state with browser Back support | Done |
 | 10 | Automated Chromium regression smoke test | Done |
 
+## Localization
+
+| Requirement | Verification | Status |
+|---|---|---|
+| English is the first-load default | `<html lang="en">`, title and dynamic detail copy are English | Done |
+| Visible header language switch | `EN / 中文` control has pressed state and keyboard focus styling | Done |
+| Chinese can be restored | `#lang=zh` and `localStorage` restore the selected locale | Done |
+| Binding descriptions stay language-independent | Descriptions are byte-for-byte identical before and after switching or reloading | Done |
+| Dynamic UI and diagnostics are localized | Search, key details, submaps, empty states and all current diagnostic codes switch language | Done |
+| Language switch works on mobile | Switch stays inside the viewport without overlapping the source note | Done |
+

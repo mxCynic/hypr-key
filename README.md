@@ -10,6 +10,11 @@ Search from the page with `/` or `Ctrl+K`. Supported field filters include
 `key:super+r`, `submap:resize`, `flag:repeating`, `device:`, `command:` and
 `action:`.
 
+The interface defaults to English. Use the `EN / 中文` switch in the header to
+change locale; the choice is stored locally and `#lang=zh` also makes a shared
+URL open in Chinese. Binding descriptions are always displayed exactly as
+written in the Hyprland config and are never translated.
+
 Chord searches accept equivalent spellings such as `SUPER A`, `SUPER + A`,
 `super+a` and `key:super+a`.
 
@@ -34,3 +39,4 @@ Layout:
 - `src/hypr_keymap/render.py`: payload generation and asset embedding
 - `src/hypr_keymap/cli.py`: command-line entry point
 - `src/hypr_keymap/assets/`: HTML, CSS, JavaScript and Lua assets
+  - `i18n.js`: English and Chinese UI strings; Hyprland descriptions stay raw

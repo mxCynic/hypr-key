@@ -1,24 +1,57 @@
     (() => {
+      const I18N = window.HYPR_I18N || {};
+      const SUPPORTED_LANGUAGES = ["en", "zh"];
+      const LANGUAGE_STORAGE_KEY = "hypr-keymap-language";
+
+      function readStoredLanguage() {
+        try {
+          const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+          return SUPPORTED_LANGUAGES.includes(stored) ? stored : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function readUrlLanguage() {
+        try {
+          const value = new URLSearchParams(location.hash.slice(1)).get("lang");
+          return SUPPORTED_LANGUAGES.includes(value) ? value : null;
+        } catch {
+          return null;
+        }
+      }
+
+      let locale = readUrlLanguage() || readStoredLanguage() || "en";
+
+      function lookupTranslation(key) {
+        const value = I18N[locale]?.[key] ?? I18N.en?.[key];
+        return typeof value === "string" ? value : null;
+      }
+
+      function t(key, params = {}) {
+        const template = lookupTranslation(key);
+        if (template === null) return key;
+        return template.replace(/\{(\w+)\}/g, (match, name) =>
+          Object.hasOwn(params, name) ? String(params[name]) : match,
+        );
+      }
+
+      function quantity(key, count, params = {}) {
+        return t(`${key}.${count === 1 ? "one" : "other"}`, { ...params, count });
+      }
+
+      function storeLanguage(value) {
+        try {
+          window.localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+        } catch {
+          // file:// or hardened browser profiles may disable localStorage.
+        }
+      }
+
       const data = JSON.parse(document.querySelector("#bind-data").textContent);
       const bindings = data.bindings;
       const MODIFIERS = ["SUPER", "CTRL", "ALT", "SHIFT"];
       const MOD_LABELS = { SUPER: "Super", CTRL: "Ctrl", ALT: "Alt", SHIFT: "Shift" };
-      const FLAG_LABELS = {
-        repeating: "重复触发",
-        locked: "锁屏可用",
-        release: "松开触发",
-        non_consuming: "事件透传",
-        auto_consuming: "失败时透传",
-        mouse: "鼠标绑定",
-        transparent: "不可遮蔽",
-        ignore_mods: "忽略修饰键",
-        dont_inhibit: "绕过应用抑制",
-        long_press: "长按触发",
-        click: "点击触发",
-        drag: "拖动触发",
-        allow_input_capture: "输入捕获时可用",
-        submap_universal: "全局 submap",
-      };
       const MOD_TARGETS = {
         SUPER_LEFT: "SUPER", SUPER_RIGHT: "SUPER",
         CTRL_LEFT: "CTRL", CTRL_RIGHT: "CTRL",
@@ -93,15 +126,20 @@
       const keyLabel = (binding) => binding.raw_key && binding.raw_key.startsWith("code:") ? binding.key : binding.key;
       const displayTrigger = (value) => value
         .split(" + ")
-        .map((part) => ({ press: "按下", release: "松开", long_press: "长按", click: "点击", drag: "拖动" }[part] || part))
+        .map((part) => lookupTranslation(`trigger.${part}`) !== null ? t(`trigger.${part}`) : part)
         .join(" + ");
       const displaySubmap = (name, universal) => universal
-        ? "全局生效（universal）"
-        : name === "global" ? "全局" : name;
+        ? t("submap.universal")
+        : name === "global" ? t("submap.global") : name;
       const displayDevice = (value) => value
-        .replace(/^all devices$/, "全部设备")
-        .replace(/^only: /, "仅 ")
-        .replace(/^except: /, "排除 ");
+        .replace(/^all devices$/, () => t("device.all"))
+        .replace(/^no devices$/, () => t("device.none"))
+        .replace(/^only: (.*)$/, (_, devices) => t("device.only", { devices }))
+        .replace(/^except: (.*)$/, (_, devices) => t("device.except", { devices }));
+      const flagLabel = (flag) => {
+        const key = `flag.${flag}`;
+        return lookupTranslation(key) !== null ? t(key) : flag;
+      };
       const activeBindings = () => {
         if (viewMode === "search") {
           return searchResults;
@@ -123,6 +161,13 @@
       const primary = (key) => keyMatches(key)[0];
       const duplicates = (key) => keyMatches(key).some((binding) => binding.duplicate_group !== null);
 
+      function updateSearchCount() {
+        const count = document.querySelector("#search-count");
+        count.textContent = viewMode === "search"
+          ? `${searchResults.length} / ${bindings.length}`
+          : quantity("unit.bind", bindings.length);
+      }
+
       function resetSearchState() {
         searchQuery = "";
         searchResults = [];
@@ -133,7 +178,8 @@
         document.querySelector("#bind-search").setAttribute("aria-expanded", "false");
         document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
         document.querySelector("#search-clear").hidden = true;
-        document.querySelector("#search-count").textContent = `${bindings.length} BINDS`;
+        document.querySelector("#search-count").textContent =
+          quantity("unit.bind", bindings.length);
         closeSearchPopover();
         updateSearchFilterButtons();
       }
@@ -293,11 +339,12 @@
       function renderSearchPopover() {
         const root = document.querySelector("#search-results");
         root.replaceChildren();
-        document.querySelector("#search-popover-count").textContent = `${searchResults.length} 条`;
+        document.querySelector("#search-popover-count").textContent =
+          quantity("unit.result", searchResults.length);
         if (!searchResults.length) {
           const empty = document.createElement("div");
           empty.className = "search-popover-empty";
-          empty.textContent = "没有匹配项";
+          empty.textContent = t("search.none");
           root.append(empty);
           return;
         }
@@ -316,15 +363,18 @@
           const copy = document.createElement("span");
           copy.className = "search-result-copy";
           const title = document.createElement("strong");
-          appendHighlightedText(title, binding.title || "未提供 description", terms);
+          appendHighlightedText(title, binding.title || t("binding.noDescription"), terms);
           const detail = document.createElement("span");
-          detail.textContent = `${displaySubmap(binding.submap, binding.submap_universal)} · ${displayTrigger(binding.trigger_label)}`;
+          detail.textContent = displaySubmap(binding.submap, binding.submap_universal);
           copy.append(title, detail);
           const meta = document.createElement("span");
           meta.className = "search-result-meta";
           meta.textContent = binding.flags.length
-            ? binding.flags.filter((flag) => flag !== "submap_universal").join(" · ")
-            : binding.device_scope;
+            ? binding.flags
+              .filter((flag) => flag !== "submap_universal")
+              .map(flagLabel)
+              .join(" · ")
+            : displayDevice(binding.device_scope);
           row.append(combo, copy, meta);
           row.addEventListener("click", () => commitSearchResult(binding));
           root.append(row);
@@ -364,7 +414,7 @@
         viewMode = "search";
         selectedTarget = null;
         activeSearchResult = 0;
-        document.querySelector("#search-count").textContent = `${searchResults.length} / ${bindings.length}`;
+        updateSearchCount();
         renderDetail();
         openSearchPopover();
         syncUrl(false);
@@ -389,6 +439,7 @@
       function syncUrl(push = false) {
         if (restoringUrl) return;
         const params = new URLSearchParams();
+        if (locale !== "en") params.set("lang", locale);
         if (searchQuery) params.set("q", searchQuery);
         if (searchFilter !== "all") params.set("filter", searchFilter);
         if (viewMode === "submap" && activeSubmap) params.set("submap", activeSubmap);
@@ -407,6 +458,12 @@
         if (!location.hash) return;
         restoringUrl = true;
         const params = new URLSearchParams(location.hash.slice(1));
+        const urlLanguage = params.get("lang");
+        let languageChanged = false;
+        if (SUPPORTED_LANGUAGES.includes(urlLanguage) && urlLanguage !== locale) {
+          locale = urlLanguage;
+          languageChanged = true;
+        }
         resetSearchState();
         searchFilter = params.get("filter") || "all";
         const submap = params.get("submap");
@@ -434,7 +491,12 @@
           selectedTarget = key || defaultTarget;
         }
         updateSearchFilterButtons();
-        renderDetail();
+        if (languageChanged) {
+          refreshLocalizedSections();
+        } else {
+          renderDetail();
+          if (searchOpen) renderSearchPopover();
+        }
         restoringUrl = false;
       }
 
@@ -577,18 +639,20 @@
 
         allButtons.forEach((button) => {
           const target = button.dataset.target;
-          const isEntry = MODIFIERS.includes(target)
+          const modifierTarget = MODIFIERS.includes(target);
+          const isEntry = modifierTarget
             ? entryModifiers.has(target)
             : entryKeys.has(target);
-          const isMember = MODIFIERS.includes(target)
+          const isMember = modifierTarget
             ? memberModifiers.has(target)
             : memberKeys.has(target);
-          const isExit = MODIFIERS.includes(target)
+          const isExit = modifierTarget
             ? exitModifiers.has(target)
             : exitKeys.has(target);
           button.classList.toggle("is-submap-entry", isEntry);
-          button.classList.toggle("is-submap-member", isMember);
           button.classList.toggle("is-submap-exit", isExit);
+          button.classList.toggle("is-submap-entry-modifier", modifierTarget && isEntry);
+          button.classList.toggle("is-submap-exit-modifier", modifierTarget && isExit);
           button.classList.toggle(
             "is-context-dimmed",
             viewMode !== "all" && !isEntry && !isMember,
@@ -597,7 +661,6 @@
             if (viewMode === "all" || isEntry || isMember) {
               activeMainTargets.push(target);
             }
-            const modifierTarget = MODIFIERS.includes(target);
             const shown = modifierTarget ? [] : displayMatches(target);
             const count = shown.length;
             const first = shown[0];
@@ -617,34 +680,47 @@
               const entrySubmap = viewMode === "overview" ? submapForEntryTarget(target) : null;
               const spokenKey = target === "SPACE" ? "Space" : target;
               const descriptions = shown
-                .map((binding) => binding.title || "未提供 description")
+                .map((binding) => binding.title || t("binding.noDescription"))
                 .slice(0, 2)
-                .join("；");
+                .join(t("common.semicolon"));
+              const shownDescriptions = shown
+                .map((binding) => binding.title || t("binding.noDescription"))
+                .join(t("common.semicolon"));
               const modeDescription = entrySubmap
-                ? `，Submap 入口，双击进入 ${entrySubmap}`
+                ? t("keyboard.entryMode", { name: entrySubmap })
                 : viewMode === "submap"
                   ? isExit
-                    ? `，Submap ${activeSubmap} 出口，双击返回全局`
-                    : `，Submap ${activeSubmap} 成员`
+                    ? t("keyboard.exitMode", { name: activeSubmap })
+                    : t("keyboard.memberMode", { name: activeSubmap })
                   : "";
+              const extraDescription = count > 2
+                ? t("keyboard.moreCombinations", { count: count - 2 })
+                : "";
               button.setAttribute(
                 "aria-label",
                 count > 0
-                  ? `${spokenKey}，${descriptions}${count > 2 ? `，另有 ${count - 2} 个组合` : ""}${modeDescription}`
-                  : `${spokenKey}，未绑定`,
+                  ? t("keyboard.keyAria", {
+                    key: spokenKey,
+                    descriptions,
+                    extra: extraDescription,
+                    mode: modeDescription,
+                  })
+                  : t("keyboard.unboundAria", { key: spokenKey }),
               );
               button.title = entrySubmap
-                ? `${target}：双击进入 ${entrySubmap}`
+                ? t("keyboard.entryTitle", { key: target, name: entrySubmap })
                 : isExit
-                  ? `${target}：双击返回全局`
+                  ? t("keyboard.exitTitle", { key: target })
                 : count
-                ? `${target}：${shown.map((binding) => binding.title || "未提供 description").join("；")}`
-                : `${target}：未绑定`;
+                ? t("keyboard.boundTitle", { key: target, descriptions: shownDescriptions })
+                : t("keyboard.unboundTitle", { key: target });
             } else {
               const modifierCount = matches(target).length;
               button.setAttribute(
                 "aria-label",
-                `${MOD_LABELS[target] || target} 修饰键，参与 ${modifierCount} 个组合`,
+                quantity("keyboard.modifierAria", modifierCount, {
+                  name: MOD_LABELS[target] || target,
+                }),
               );
             }
           } else {
@@ -664,12 +740,12 @@
         const text = document.querySelector("#keyboard-filter-text");
         bar.hidden = viewMode === "all";
         if (viewMode === "overview") {
-          text.textContent = `SUBMAPS：高亮全部 ${data.submaps.length} 个入口键；双击主键可进入对应 submap`;
+          text.textContent = quantity("mode.overview", data.submaps.length);
         } else if (viewMode === "search") {
-          text.textContent = `搜索：匹配 ${searchResults.length} 个绑定`;
+          text.textContent = quantity("mode.search", searchResults.length);
         } else if (viewMode === "submap") {
           const count = submapByName.get(activeSubmap)?.binding_ids.length || 0;
-          text.textContent = `SUBMAP ${activeSubmap}：高亮 ${count} 个按键；双击橙色出口键返回`;
+          text.textContent = quantity("mode.submap", count, { name: activeSubmap });
         }
       }
 
@@ -731,10 +807,17 @@
         badge.textContent = count > 1 ? `+${count - 1}` : String(count);
         button.append(label, hint, badge);
         button.title = MODIFIERS.includes(target)
-          ? `${definition.label} 修饰键，参与 ${matches(target).length} 个组合`
+          ? quantity("keyboard.modifierAria", matches(target).length, {
+            name: MOD_LABELS[target] || definition.label,
+          })
           : count
-            ? `${definition.label}：${matches(target).map((binding) => binding.title || "未提供 description").join("；")}`
-            : `${definition.label}：未绑定`;
+            ? t("keyboard.boundTitle", {
+              key: definition.label,
+              descriptions: matches(target)
+                .map((binding) => binding.title || t("binding.noDescription"))
+                .join(t("common.semicolon")),
+            })
+            : t("keyboard.unboundTitle", { key: definition.label });
         button.addEventListener("click", () => {
           setRovingKey(target);
           select(target);
@@ -824,11 +907,15 @@
           button.type = "button";
           button.className = "extra-key";
           button.dataset.target = binding.key;
+          button.dataset.bindingId = String(binding.id);
           button.classList.toggle("has-duplicate", duplicates(binding.key));
           button.innerHTML = `<span class="extra-key-label"></span><span class="extra-key-code"></span>`;
           button.querySelector(".extra-key-label").textContent = binding.short;
           button.querySelector(".extra-key-code").textContent = binding.key.replace("XF86", "");
-          button.title = `${binding.key}：${binding.title || "未提供 description"}`;
+          button.title = t("keyboard.boundTitle", {
+            key: binding.key,
+            descriptions: binding.title || t("binding.noDescription"),
+          });
           button.addEventListener("click", () => select(binding.key));
           document.querySelector("#extra-keys").append(button);
           allButtons.push(button);
@@ -843,24 +930,71 @@
           button.type = "button";
           button.className = "mouse-key";
           button.dataset.target = binding.key;
+          button.dataset.bindingId = String(binding.id);
           button.classList.toggle("has-duplicate", duplicates(binding.key));
           const icon = binding.key === "mouse:272" ? "L" : binding.key === "mouse:273" ? "R" : binding.key === "mouse_up" ? "↑" : "↓";
           button.innerHTML = `<span class="mouse-icon">${icon}</span><span class="mouse-copy"><strong></strong><span></span></span>`;
           button.querySelector(".mouse-copy strong").textContent = binding.combo;
           button.querySelector(".mouse-copy span").textContent = binding.short;
+          button.title = t("keyboard.boundTitle", {
+            key: binding.combo,
+            descriptions: binding.title || t("binding.noDescription"),
+          });
           button.addEventListener("click", () => select(binding.key));
           document.querySelector("#mouse-keys").append(button);
           allButtons.push(button);
         }
       }
 
+      function localizedDiagnostic(issue) {
+        const params = { ...(issue.params || {}) };
+        if (params.context) {
+          params.context = displaySubmap(params.context, params.context === "universal");
+        }
+        if (params.trigger) params.trigger = displayTrigger(params.trigger);
+        if (Array.isArray(params.entries)) {
+          params.details = params.entries
+            .map((entry) => t("diagnostics.lineDescription", {
+              line: entry.line,
+              description: entry.description || t("binding.noDescription"),
+            }))
+            .join(t("common.semicolon"));
+        }
+        if (Array.isArray(params.reasons)) {
+          params.reasons = params.reasons
+            .map((reason) => t(`diagnostics.reason.${reason}`))
+            .join(t("common.listSeparator"));
+        }
+        const variant = params.kind ? `.${params.kind}` : "";
+        const titleKey = `diagnostics.${issue.code}.title${variant}`;
+        const messageKey = `diagnostics.${issue.code}.message${variant}`;
+        return {
+          title: lookupTranslation(titleKey) !== null ? t(titleKey, params) : issue.title,
+          message: lookupTranslation(messageKey) !== null
+            ? t(messageKey, params)
+            : issue.message,
+        };
+      }
+
       function renderDiagnostics() {
         const root = document.querySelector("#diagnostics-list");
         const errors = data.stats.errors;
         const warnings = data.stats.warnings;
-        document.querySelector("#diagnostics-summary").textContent = `${errors} ERRORS / ${warnings} WARNINGS / ${data.submaps.length} SUBMAPS`;
+        document.querySelector("#diagnostics-summary").textContent = [
+          quantity("diagnostics.errorCount", errors),
+          quantity("diagnostics.warningCount", warnings),
+          quantity("diagnostics.submapCount", data.submaps.length),
+        ].join(" / ");
+        root.replaceChildren();
         if (!data.diagnostics.length) {
-          root.innerHTML = `<div class="diagnostics-clean"><i>✓</i><span>未发现重复键位或明显配置问题。</span></div>`;
+          const clean = document.createElement("div");
+          clean.className = "diagnostics-clean";
+          const icon = document.createElement("i");
+          icon.textContent = "✓";
+          const copy = document.createElement("span");
+          copy.textContent = t("diagnostics.clean");
+          clean.append(icon, copy);
+          root.append(clean);
           return;
         }
         const list = document.createElement("div");
@@ -868,14 +1002,15 @@
         for (const issue of data.diagnostics) {
           const card = document.createElement("article");
           card.className = `diagnostic is-${issue.severity}`;
+          const localized = localizedDiagnostic(issue);
           const title = document.createElement("h3");
           title.className = "diagnostic-title";
           const severity = document.createElement("span");
           severity.className = "severity";
-          severity.textContent = issue.severity === "error" ? "ERROR" : "WARN";
-          title.append(severity, document.createTextNode(issue.title));
+          severity.textContent = t(`diagnostics.severity.${issue.severity}`);
+          title.append(severity, document.createTextNode(localized.title));
           const message = document.createElement("p");
-          message.textContent = issue.message;
+          message.textContent = localized.message;
           const meta = document.createElement("div");
           meta.className = "diagnostic-meta";
           issue.lines.forEach((line) => {
@@ -887,7 +1022,7 @@
           if (issue.key) {
             const button = document.createElement("button");
             button.type = "button";
-            button.textContent = `查看 ${issue.key}`;
+            button.textContent = t("diagnostics.viewKey", { key: issue.key });
             button.addEventListener("click", () => select(issue.key));
             card.append(button);
           }
@@ -898,34 +1033,49 @@
 
       function renderSubmapIndex() {
         const root = document.querySelector("#submap-index");
+        root.replaceChildren();
         const head = document.createElement("div");
         head.className = "submap-index-head";
-        head.innerHTML = `<span>SUBMAP 导航</span><span class="submap-head-actions"><span>${data.submaps.length} 个 submap</span></span>`;
+        const heading = document.createElement("span");
+        heading.textContent = t("submap.navigation");
+        const actions = document.createElement("span");
+        actions.className = "submap-head-actions";
+        const count = document.createElement("span");
+        count.textContent = quantity("submap.count", data.submaps.length);
+        actions.append(count);
+        head.append(heading, actions);
         const toggle = document.createElement("button");
         toggle.type = "button";
         toggle.className = "submap-toggle";
-        toggle.textContent = submapsExpanded ? "收起" : "展开";
+        toggle.textContent = t(submapsExpanded ? "submap.collapse" : "submap.expand");
+        toggle.setAttribute("aria-expanded", String(submapsExpanded));
         toggle.addEventListener("click", () => {
           submapsExpanded = !submapsExpanded;
           list.hidden = !submapsExpanded;
-          toggle.textContent = submapsExpanded ? "收起" : "展开";
+          toggle.textContent = t(submapsExpanded ? "submap.collapse" : "submap.expand");
+          toggle.setAttribute("aria-expanded", String(submapsExpanded));
         });
-        head.querySelector(".submap-head-actions").append(toggle);
+        actions.append(toggle);
 
         const overview = document.createElement("button");
         overview.type = "button";
         overview.className = "submap-overview-button";
         overview.disabled = data.submaps.length === 0;
-        overview.innerHTML = `
-          <div><strong>查看全部 submap 入口</strong><span>高亮全部入口键</span></div>
-          <b>→</b>
-        `;
+        const overviewCopy = document.createElement("div");
+        const overviewTitle = document.createElement("strong");
+        overviewTitle.textContent = t("submap.overviewTitle");
+        const overviewSubtitle = document.createElement("span");
+        overviewSubtitle.textContent = t("submap.overviewSubtitle");
+        overviewCopy.append(overviewTitle, overviewSubtitle);
+        const overviewArrow = document.createElement("b");
+        overviewArrow.textContent = "→";
+        overview.append(overviewCopy, overviewArrow);
         overview.addEventListener("click", enterSubmapOverview);
         root.append(head, overview);
         if (!data.submaps.length) {
           const empty = document.createElement("div");
           empty.className = "submap-empty";
-          empty.textContent = "当前配置没有定义 submap。";
+          empty.textContent = t("submap.empty");
           root.append(empty);
           return;
         }
@@ -941,18 +1091,21 @@
           card.type = "button";
           card.className = "submap-card";
           card.disabled = submap.binding_ids.length === 0;
-          card.setAttribute("aria-label", `查看 ${submap.name} submap 的按键`);
+          card.setAttribute("aria-label", t("submap.view", { name: submap.name }));
           const name = document.createElement("strong");
           name.textContent = submap.name;
           const summary = document.createElement("span");
-          summary.textContent = `${submap.binding_ids.length} 个按键 · ${entries.length} 个入口`;
+          summary.textContent = t("submap.summary", {
+            keys: quantity("unit.key", submap.binding_ids.length),
+            entries: quantity("unit.entry", entries.length),
+          });
           const shortcuts = document.createElement("code");
           shortcuts.textContent = entries.length
             ? entries.map((binding) => binding.combo).join(" / ")
-            : "没有找到入口绑定";
+            : t("submap.noEntries");
           const cta = document.createElement("span");
           cta.className = "submap-card-cta";
-          cta.textContent = "点击进入 →";
+          cta.textContent = t("submap.cta");
           card.append(name, summary, shortcuts, cta);
           card.addEventListener("click", () => enterSubmapContent(submap.name));
           list.append(card);
@@ -1005,9 +1158,8 @@
         const scope = document.createElement("div");
         scope.className = "binding-scope";
         [
-          ["Submap", displaySubmap(binding.submap, binding.submap_universal)],
-          ["Trigger", displayTrigger(binding.trigger_label)],
-          ["Device", displayDevice(binding.device_scope)],
+          [t("binding.submap"), displaySubmap(binding.submap, binding.submap_universal)],
+          [t("binding.device"), displayDevice(binding.device_scope)],
         ].forEach(([label, value]) => {
           const item = document.createElement("div");
           item.className = "binding-scope-item";
@@ -1021,17 +1173,14 @@
         const flagsSection = document.createElement("div");
         flagsSection.className = "binding-flags-section";
         const flagsLabel = document.createElement("span");
-        flagsLabel.textContent = "Flags";
+        flagsLabel.textContent = t("binding.flags");
         const flagList = document.createElement("div");
         flagList.className = "flag-list";
-        const extraFlags = binding.flags.filter(
-          (flag) => !["submap_universal", "release", "long_press", "click", "drag"].includes(flag),
-        );
-        if (extraFlags.length) {
-          extraFlags.forEach((flag) => {
+        if (binding.flags.length) {
+          binding.flags.forEach((flag) => {
             const item = document.createElement("span");
             item.className = "flag-pill";
-            item.append(document.createTextNode(FLAG_LABELS[flag] || flag));
+            item.append(document.createTextNode(flagLabel(flag)));
             const code = document.createElement("code");
             code.textContent = flag;
             item.append(code);
@@ -1040,18 +1189,18 @@
         } else {
           const none = document.createElement("span");
           none.className = "flag-pill";
-          none.textContent = "无额外 flags";
+          none.textContent = t("binding.noFlags");
           flagList.append(none);
         }
         flagsSection.append(flagsLabel, flagList);
         const title = document.createElement("h3");
         title.className = "binding-title";
-        title.textContent = binding.title || "未提供 description";
+        title.textContent = binding.title || t("binding.noDescription");
         title.classList.toggle("is-missing", !binding.title);
         if (binding.duplicate_group !== null) {
           const badge = document.createElement("span");
           badge.className = "bug-badge";
-          badge.textContent = "重复";
+          badge.textContent = t("binding.duplicate");
           title.append(badge);
         }
         const detail = document.createElement("p");
@@ -1066,10 +1215,12 @@
         meta.className = "binding-meta";
         meta.innerHTML = `<span></span><span></span>`;
         meta.children[0].textContent = `${data.source_name}:${binding.line}`;
-        const sourceLabel = { description: "DESCRIPTION", missing: "NO DESCRIPTION" }[binding.annotation_source] || "NO DESCRIPTION";
+        const sourceLabel = binding.annotation_source === "description"
+          ? t("binding.descriptionSource")
+          : t("binding.missingDescriptionSource");
         meta.children[1].textContent = binding.enabled
-          ? `${binding.device === "mouse" ? "MOUSE BIND" : "HYPR BIND"} · ${sourceLabel}`
-          : "DISABLED";
+          ? `${t(binding.device === "mouse" ? "binding.mouseBind" : "binding.hyprBind")} · ${sourceLabel}`
+          : t("binding.disabled");
         card.append(title, detail, scope, flagsSection, command, meta);
         return card;
       }
@@ -1085,6 +1236,17 @@
         });
       }
 
+      function emptyState(strongText, hintText) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        const copy = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = strongText;
+        copy.append(strong, document.createTextNode(hintText));
+        empty.append(copy);
+        return empty;
+      }
+
       function renderDetail() {
         const list = document.querySelector("#binding-list");
         if (viewMode === "search" && selectedTarget === null) {
@@ -1092,18 +1254,19 @@
           list.removeAttribute("aria-label");
           document.querySelector("#selected-cap").textContent = "⌕";
           document.querySelector("#current-selection").textContent = "—";
-          document.querySelector("#detail-title").textContent = "搜索匹配";
-          document.querySelector("#detail-count").textContent = `${searchResults.length} BINDS`;
-          document.querySelector("#detail-eyebrow").textContent = "SEARCH";
+          document.querySelector("#detail-title").textContent = t("detail.searchTitle");
+          document.querySelector("#detail-count").textContent =
+            quantity("unit.bind", searchResults.length);
+          document.querySelector("#detail-eyebrow").textContent = t("detail.searchEyebrow");
           document.querySelector("#detail-subtitle").textContent = searchQuery
-            ? `“${searchQuery}” 的结果已显示在搜索框下方`
-            : "筛选结果已显示在搜索框下方";
-          announceDetail(`搜索结果，共 ${searchResults.length} 个绑定`);
+            ? t("detail.searchSubtitle", { query: searchQuery })
+            : t("detail.filterSubtitle");
+          announceDetail(quantity("live.search", searchResults.length));
           list.replaceChildren();
-          const empty = document.createElement("div");
-          empty.className = "empty";
-          empty.innerHTML = `<div><strong>${searchResults.length ? "从搜索面板选择一个结果。" : "没有匹配的绑定。"}</strong>使用上下键移动，Enter 打开详情。</div>`;
-          list.append(empty);
+          list.append(emptyState(
+            t(searchResults.length ? "detail.searchEmptyStrong" : "detail.searchEmptyNoneStrong"),
+            t("search.choiceHint"),
+          ));
           updateStyles();
           updateKeyboardHighlights();
           updateModeBar();
@@ -1115,24 +1278,29 @@
           const overview = viewMode === "overview";
           document.querySelector("#selected-cap").textContent = overview ? "Σ" : "↓";
           document.querySelector("#current-selection").textContent = "—";
-          document.querySelector("#detail-title").textContent = overview ? "全部 submap" : (activeSubmap || "submap");
-          document.querySelector("#detail-count").textContent = overview ? `${data.submaps.length} SUBMAPS` : "0 BINDS";
-          document.querySelector("#detail-eyebrow").textContent = overview ? "SUBMAP 总览" : "SUBMAP";
+          document.querySelector("#detail-title").textContent = overview
+            ? t("detail.overviewTitle")
+            : activeSubmap;
+          document.querySelector("#detail-count").textContent = overview
+            ? quantity("submap.count", data.submaps.length)
+            : quantity("unit.bind", 0);
+          document.querySelector("#detail-eyebrow").textContent =
+            t(overview ? "detail.overviewEyebrow" : "detail.submapEyebrow");
           document.querySelector("#detail-subtitle").textContent = overview
-            ? "键盘保持完整布局，并高亮所有 submap 的入口键。"
-            : "这个 submap 没有可用绑定。";
+            ? t("detail.overviewSubtitle")
+            : t("detail.emptySubmap", { name: activeSubmap });
           announceDetail(
             overview
-              ? `全部 submap，共 ${data.submaps.length} 个入口键`
-              : `${activeSubmap} 没有可用绑定`,
+              ? quantity("live.overview", data.submaps.length)
+              : t("live.submapEmpty", { name: activeSubmap }),
           );
           list.replaceChildren();
-          const empty = document.createElement("div");
-          empty.className = "empty";
-          empty.innerHTML = overview
-            ? `<div><strong>全部 submap 入口已高亮。</strong>点击任一入口键查看其绑定，或从下方的 submap 卡片进入成员视图。</div>`
-            : `<div><strong>${activeSubmap} 没有按键。</strong>点击“返回全局”继续浏览。</div>`;
-          list.append(empty);
+          list.append(overview
+            ? emptyState(t("detail.overviewEmptyStrong"), t("detail.overviewEmptyHint"))
+            : emptyState(
+              t("detail.emptySubmapStrong", { name: activeSubmap }),
+              t("detail.emptySubmapHint"),
+            ));
           updateStyles();
           updateKeyboardHighlights();
           updateModeBar();
@@ -1145,28 +1313,33 @@
         document.querySelector("#selected-cap").textContent = title;
         document.querySelector("#current-selection").textContent = title;
         document.querySelector("#detail-title").textContent = title;
-        document.querySelector("#detail-count").textContent = `${found.length} ${found.length === 1 ? "BIND" : "BINDS"}`;
-        document.querySelector("#detail-eyebrow").textContent = modifier ? "修饰键筛选" : "按键组合";
+        document.querySelector("#detail-count").textContent =
+          quantity("unit.bind", found.length);
+        document.querySelector("#detail-eyebrow").textContent =
+          t(modifier ? "detail.modifierEyebrow" : "detail.keyEyebrow");
         document.querySelector("#detail-subtitle").textContent = modifier
-          ? `所有包含 ${title} 的组合`
+          ? t("detail.modifierFilter", { name: title })
           : found.length
-            ? `这个键参与 ${found.length} 个按键组合`
+            ? quantity("detail.keyCombos", found.length)
             : viewMode === "submap"
-              ? `当前 submap ${activeSubmap} 中没有这个键的绑定`
-              : "这个键目前没有绑定功能";
+              ? t("detail.noBindingInSubmap", { name: activeSubmap })
+              : t("detail.noBinding");
         announceDetail(
           found.length
-            ? `${title}，${found.length} 个绑定`
-            : `${title}，未绑定`,
+            ? quantity("live.key", found.length, { key: title })
+            : t("live.unbound", { key: title }),
         );
         list.replaceChildren();
         if (!found.length) {
-          const empty = document.createElement("div");
-          empty.className = "empty";
-          empty.innerHTML = viewMode === "submap"
-            ? `<div><strong>${title} 不在 ${activeSubmap} 中。</strong>当前 submap 没有这个键的绑定，可点击“返回全局”查看原配置。</div>`
-            : `<div><strong>${title} 还没有绑定。</strong>点击其他带功能提示的键继续查看。</div>`;
-          list.append(empty);
+          list.append(viewMode === "submap"
+            ? emptyState(
+              t("detail.notInSubmap", { key: title, name: activeSubmap }),
+              t("detail.notInSubmapHint"),
+            )
+            : emptyState(
+              t("detail.unbound", { key: title }),
+              t("detail.unboundHint"),
+            ));
         } else {
           found.forEach((binding) => list.append(bindingCard(binding)));
         }
@@ -1190,12 +1363,14 @@
       function renderStats() {
         document.querySelector("#source-path").textContent = data.source_path;
         document.querySelector("#generated-at").textContent = data.generated_at;
-        document.querySelector("#case-label").textContent = `HYPRLAND // ${data.stats.bindings} BINDS`;
+        document.querySelector("#case-label").textContent = t("case.label", {
+          bindings: quantity("unit.bind", data.stats.bindings),
+        });
         document.querySelector("#stat-bindings").textContent = data.stats.bindings;
         document.querySelector("#stat-keys").textContent = data.stats.keys;
         document.querySelector("#stat-duplicates").textContent = data.stats.duplicate_groups;
         document.querySelector("#stat-warnings").textContent = data.stats.warnings;
-        document.querySelector("#search-count").textContent = `${bindings.length} BINDS`;
+        updateSearchCount();
         document.querySelector("#stat-duplicate-wrap").classList.toggle("is-bad", data.stats.duplicate_groups > 0);
         document.querySelector("#stat-duplicate-wrap").classList.toggle("is-good", data.stats.duplicate_groups === 0);
       }
@@ -1206,6 +1381,63 @@
           scroller.scrollWidth <= scroller.clientWidth + 1;
       }
 
+      function syncDiagnosticsState() {
+        const panel = document.querySelector("#diagnostics-panel");
+        document.querySelector("#diagnostics-state").textContent =
+          t(panel.open ? "diagnostics.close" : "diagnostics.open");
+      }
+
+      function applyStaticLocale() {
+        document.documentElement.lang = locale;
+        document.title = t("page.title");
+        document.querySelectorAll("[data-i18n]").forEach((element) => {
+          element.textContent = t(element.dataset.i18n);
+        });
+        document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+          element.setAttribute("placeholder", t(element.dataset.i18nPlaceholder));
+        });
+        document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
+          element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel));
+        });
+        document.querySelectorAll(".language-switch [data-lang]").forEach((button) => {
+          const active = button.dataset.lang === locale;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        syncDiagnosticsState();
+      }
+
+      function updateAuxiliaryLabels() {
+        document.querySelectorAll("[data-binding-id]").forEach((button) => {
+          const binding = bindingById.get(Number(button.dataset.bindingId));
+          if (!binding) return;
+          button.title = t("keyboard.boundTitle", {
+            key: button.classList.contains("mouse-key") ? binding.combo : binding.key,
+            descriptions: binding.title || t("binding.noDescription"),
+          });
+        });
+      }
+
+      function refreshLocalizedSections() {
+        applyStaticLocale();
+        renderStats();
+        updateAuxiliaryLabels();
+        renderDiagnostics();
+        renderSubmapIndex();
+        updateSearchFilterButtons();
+        renderDetail();
+        if (searchOpen) renderSearchPopover();
+      }
+
+      function applyLocale(nextLocale) {
+        if (!SUPPORTED_LANGUAGES.includes(nextLocale)) return;
+        locale = nextLocale;
+        storeLanguage(locale);
+        refreshLocalizedSections();
+        syncUrl(false);
+      }
+
+      applyStaticLocale();
       renderStats();
       renderKeyboard();
       updateKeyboardOverflowHint();
@@ -1214,6 +1446,10 @@
       renderMouseKeys();
       renderDiagnostics();
       renderSubmapIndex();
+      document.querySelectorAll(".language-switch [data-lang]").forEach((button) => {
+        button.addEventListener("click", () => applyLocale(button.dataset.lang));
+      });
+      document.querySelector("#diagnostics-panel").addEventListener("toggle", syncDiagnosticsState);
       document.querySelector("#keyboard-filter-back").addEventListener("click", returnToGlobal);
       const searchInput = document.querySelector("#bind-search");
       searchInput.addEventListener("input", (event) => applySearch(event.target.value));
@@ -1283,6 +1519,7 @@
         }
       });
       document.addEventListener("click", (event) => {
+        if (event.target.closest(".language-switch")) return;
         if (!event.target.closest(".search-area")) closeSearchPopover();
       });
       window.addEventListener("popstate", restoreFromUrl);

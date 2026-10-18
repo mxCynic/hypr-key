@@ -13,6 +13,7 @@ from .models import Binding, Diagnostic, TOOL_VERSION
 ASSET_ROOT = files("hypr_keymap.assets")
 HTML_TEMPLATE = ASSET_ROOT.joinpath("index.html").read_text(encoding="utf-8")
 HTML_STYLE = ASSET_ROOT.joinpath("style.css").read_text(encoding="utf-8")
+HTML_I18N = ASSET_ROOT.joinpath("i18n.js").read_text(encoding="utf-8")
 HTML_SCRIPT = ASSET_ROOT.joinpath("app.js").read_text(encoding="utf-8")
 
 def render_html(
@@ -51,6 +52,7 @@ def render_html(
                 "code": issue.code,
                 "title": issue.title,
                 "message": issue.message,
+                "params": issue.params,
                 "key": issue.key,
                 "binding_ids": issue.binding_ids,
                 "lines": sorted(
@@ -73,6 +75,7 @@ def render_html(
                 "line": binding.line,
                 "source": binding.source,
                 "action_path": binding.action_path,
+                "action_args": binding.action_args,
                 "title": binding.title,
                 "short": binding.short,
                 "detail": binding.detail,
@@ -97,6 +100,7 @@ def render_html(
     )
     return (
         HTML_TEMPLATE.replace("__STYLE__", HTML_STYLE)
+        .replace("__I18N__", HTML_I18N)
         .replace("__SCRIPT__", HTML_SCRIPT)
         .replace("__PAYLOAD__", encoded)
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-TOOL_VERSION = "1.8.2"
+TOOL_VERSION = "1.9.0"
 
 
 class HyprKeymapError(RuntimeError):
@@ -332,6 +332,7 @@ class Diagnostic:
     message: str
     key: str | None = None
     binding_ids: list[int] = field(default_factory=list)
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 def display_modifier(modifier: str) -> str:
