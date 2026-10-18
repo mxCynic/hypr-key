@@ -149,6 +149,9 @@ Other Hyprland keybinding tools I found take different approaches:
 keyboard, Lua `require` graph analysis, submap navigation, flag-aware
 diagnostics, and English/Chinese UI.
 
+See [ROADMAP.md](ROADMAP.md) for the recorded project status, Omarchy findings,
+known limitations, and next release milestones.
+
 ## How it works
 
 The tool executes the configuration entry in a restricted Lua environment:
