@@ -1,0 +1,19 @@
+# hypr-keymap
+
+Generate a self-contained HTML audit of a Hyprland Lua key binding file.
+
+```bash
+uv run --project tools/hypr-keymap hypr-keymap --open
+```
+
+The `mxbin/hypr-keymap` launcher uses the same package directly, so deployment
+does not require a virtual environment or network access.
+
+Layout:
+
+- `src/hypr_keymap/models.py`: shared data structures and key constants
+- `src/hypr_keymap/extractor.py`: restricted Lua binding capture
+- `src/hypr_keymap/analysis.py`: normalization, flags, duplicate and submap checks
+- `src/hypr_keymap/render.py`: payload generation and asset embedding
+- `src/hypr_keymap/cli.py`: command-line entry point
+- `src/hypr_keymap/assets/`: HTML, CSS, JavaScript and Lua assets

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hyprland 键位审计</title>
+  <style>
+__STYLE__
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">HYPRLAND / BIND AUDIT</p>
+        <h1>键位审计</h1>
+        <p class="intro">描述只读取 Hyprland 原生 flags 中的 <code>{ description = "功能说明" }</code>。没有描述时不会推断功能，只显示真实动作、命令和行号。</p>
+      </div>
+      <div class="source-note">
+        <span class="source-dot"></span>
+        <div>
+          <strong>配置来源</strong>
+          <code id="source-path">—</code>
+        </div>
+      </div>
+    </header>
+
+    <section class="stats" aria-label="绑定概览">
+      <div class="stat"><strong id="stat-bindings">—</strong><span>个绑定</span></div>
+      <div class="stat"><strong id="stat-keys">—</strong><span>个触发键</span></div>
+      <div class="stat" id="stat-duplicate-wrap"><strong id="stat-duplicates">—</strong><span>组重复</span></div>
+      <div class="stat" id="stat-warning-wrap"><strong id="stat-warnings">—</strong><span>个警告</span></div>
+      <p class="generated" id="generated-at"></p>
+    </section>
+
+    <div class="main-grid">
+      <section class="panel keyboard-panel">
+        <div class="panel-head">
+          <div><p class="kicker">ANSI / KEYMAP</p><h2>点击一个按键</h2></div>
+          <p class="current">当前选择<strong id="current-selection">A</strong></p>
+        </div>
+        <div class="search-toolbar">
+          <label class="search-box">
+            <span>搜索</span>
+            <input id="bind-search" type="search" placeholder="描述、组合键、命令、submap、flags" autocomplete="off">
+          </label>
+          <button type="button" id="search-clear" hidden>清除</button>
+          <span class="search-count" id="search-count"></span>
+        </div>
+        <div class="submap-index" id="submap-index"></div>
+        <div class="keyboard-filter" id="keyboard-filter" hidden>
+          <span id="keyboard-filter-text"></span>
+          <button type="button" id="keyboard-filter-back">返回全局</button>
+        </div>
+        <div class="keyboard-case">
+          <div class="case-top">
+            <span class="case-label" id="case-label">HYPRLAND // KEYMAP</span>
+            <span class="case-status"><i></i> GENERATED</span>
+          </div>
+          <div class="keyboard-scroll"><div class="keyboard" id="keyboard"></div></div>
+          <div class="extra">
+            <div class="extra-head"><span>系统功能键</span><span>媒体 / 亮度</span></div>
+            <div class="extra-row" id="extra-keys"></div>
+            <div class="mouse-row" id="mouse-keys"></div>
+          </div>
+        </div>
+        <p class="legend">
+          <span class="chip bound"></span>已绑定
+          <span class="chip mod"></span>组合需要此修饰键
+          <span class="chip sel"></span>当前查看
+          <span class="chip bug"></span>存在重复
+          <span class="chip entry"></span>Submap 入口
+          <span class="chip member"></span>Submap 按键
+        </p>
+      </section>
+
+      <aside class="panel detail" aria-live="polite">
+        <div class="detail-topline"><span>SELECTED KEY</span><span id="detail-count">—</span></div>
+        <div class="selected-head">
+          <div class="selected-cap" id="selected-cap">A</div>
+          <div>
+            <p class="detail-eyebrow" id="detail-eyebrow">按键组合</p>
+            <h2 id="detail-title">A</h2>
+            <p class="detail-subtitle" id="detail-subtitle">正在读取绑定…</p>
+          </div>
+        </div>
+        <div class="binding-list" id="binding-list"></div>
+        <div class="detail-foot"><span>维护</span><p>新增 bind 时在 flags 表里写 description；未提供描述将保持为空。</p></div>
+      </aside>
+    </div>
+
+    <details class="diagnostics" id="diagnostics-panel">
+      <summary class="diagnostics-summary-row">
+        <span id="diagnostics-title">配置诊断</span>
+        <span class="diagnostics-summary" id="diagnostics-summary"></span>
+      </summary>
+      <div id="diagnostics-list"></div>
+    </details>
+  </main>
+
+  <script id="bind-data" type="application/json">__PAYLOAD__</script>
+  <script>
+__SCRIPT__
+  </script>
+</body>
+</html>

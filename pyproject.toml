@@ -1,0 +1,16 @@
+[project]
+name = "hypr-keymap"
+version = "1.5.0"
+description = "Generate and audit an interactive Hyprland keymap"
+authors = [
+    { name = "mxCynic", email = "mx1545914198@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+hypr-keymap = "hypr_keymap:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
