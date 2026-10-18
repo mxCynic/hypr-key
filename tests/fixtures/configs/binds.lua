@@ -11,6 +11,22 @@ hl.bind(mainMod .. "mouse:272", hl.dsp.window.drag(), { mouse = true, descriptio
 hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true, description = "Previous track" })
 wrapper.bind(mainMod .. "Y", "Wrapped binding", "true")
 
+-- Special XKB names and Hyprland switch binds used by Omarchy.
+hl.bind("XF86KbdBrightnessUp", hl.dsp.exec_cmd("backlight up"), { description = "Keyboard backlight up" })
+hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("backlight down"), { description = "Keyboard backlight down" })
+hl.bind("XF86KbdLightOnOff", hl.dsp.exec_cmd("backlight toggle"), { description = "Toggle keyboard backlight" })
+hl.bind("XF86TouchpadToggle", hl.dsp.exec_cmd("touchpad toggle"), { description = "Toggle touchpad" })
+hl.bind("XF86TouchpadOn", hl.dsp.exec_cmd("touchpad on"), { description = "Enable touchpad" })
+hl.bind("XF86TouchpadOff", hl.dsp.exec_cmd("touchpad off"), { description = "Disable touchpad" })
+hl.bind("XF86Eject", hl.dsp.exec_cmd("eject"), { description = "Eject media" })
+hl.bind("XF86Calculator", hl.dsp.exec_cmd("calculator"), { description = "Open calculator" })
+hl.bind(mainMod .. "grave", hl.dsp.exec_cmd("grave"), { description = "Grave key" })
+hl.bind(mainMod .. "comma", hl.dsp.exec_cmd("comma"), { description = "Comma key" })
+hl.bind(mainMod .. "period", hl.dsp.exec_cmd("period"), { description = "Period key" })
+hl.bind(mainMod .. "slash", hl.dsp.exec_cmd("slash"), { description = "Slash key" })
+hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd("lid close"), { locked = true, description = "Lid closed" })
+hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("lid open"), { locked = true, description = "Lid opened" })
+
 hl.bind(mainMod .. "R", hl.dsp.submap("resize"), { description = "Enter resize mode" })
 hl.define_submap("resize", function()
   hl.bind("H", hl.dsp.window.resize({ x = -20, y = 0, relative = true }), { repeating = true, description = "Resize left" })

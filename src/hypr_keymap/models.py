@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -160,6 +161,20 @@ KEY_ALIASES = {
     "LEFT": "ARROW_LEFT",
     "RIGHT": "ARROW_RIGHT",
     "SPACEBAR": "SPACE",
+    "GRAVE": "`",
+    "GRAVEACCENT": "`",
+    "MINUS": "-",
+    "EQUAL": "=",
+    "LEFTBRACE": "[",
+    "RIGHTBRACE": "]",
+    "BRACKETLEFT": "[",
+    "BRACKETRIGHT": "]",
+    "BACKSLASH": "\\",
+    "SEMICOLON": ";",
+    "APOSTROPHE": "'",
+    "COMMA": ",",
+    "PERIOD": ".",
+    "SLASH": "/",
 }
 
 KEY_DISPLAY = {
@@ -197,6 +212,14 @@ XF86_KEYS = {
     "XF86AudioPause",
     "XF86AudioNext",
     "XF86PowerOff",
+    "XF86KbdBrightnessUp",
+    "XF86KbdBrightnessDown",
+    "XF86KbdLightOnOff",
+    "XF86TouchpadToggle",
+    "XF86TouchpadOn",
+    "XF86TouchpadOff",
+    "XF86Eject",
+    "XF86Calculator",
 }
 
 NAMED_KEYS = {
@@ -245,6 +268,15 @@ NAMED_KEYS = {
     *(f"F{number}" for number in range(1, 25)),
 }
 NAMED_KEY_LOOKUP = {key.upper(): key for key in NAMED_KEYS}
+SWITCH_KEY_PATTERN = re.compile(r"^SWITCH:(?:ON|OFF):.+$")
+
+
+def is_known_key(key: str) -> bool:
+    return (
+        key in NAMED_KEYS
+        or key.startswith("CODE:")
+        or SWITCH_KEY_PATTERN.fullmatch(key) is not None
+    )
 
 BOOLEAN_BIND_FLAGS = (
     "repeating",

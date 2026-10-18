@@ -1,6 +1,6 @@
 # Frontend audit
 
-Baseline: 89 bindings, 14 submaps.
+Baseline: 103 bindings, 14 submaps.
 
 ## P0
 

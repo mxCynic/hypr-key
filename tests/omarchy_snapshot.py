@@ -107,8 +107,8 @@ def main() -> int:
     assert len(duplicate_groups) == 2, (
         f"expected 2 duplicate groups, got {len(duplicate_groups)}"
     )
-    assert len(unknown_keys) >= 23, (
-        f"expected at least 23 unknown-key warnings, got {len(unknown_keys)}"
+    assert not unknown_keys, (
+        f"expected no unknown-key warnings, got {len(unknown_keys)}"
     )
     assert missing_combos == expected_missing, (
         f"unexpected missing descriptions: {sorted(missing_combos)}"

@@ -514,7 +514,7 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     params={"raw_key": binding.key_raw, "line": binding.line},
                 )
             )
-        if binding.key not in NAMED_KEYS and not binding.key.startswith("CODE:"):
+        if not is_known_key(binding.key):
             diagnostics.append(
                 Diagnostic(
                     "warning",
