@@ -1,6 +1,6 @@
 # Frontend audit
 
-Baseline: 163 bindings, 14 submaps, 641 DOM nodes.
+Baseline: 88 bindings, 14 submaps.
 
 ## P0
 

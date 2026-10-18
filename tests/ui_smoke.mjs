@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 const project = path.resolve(import.meta.dirname, "..");
-const repo = path.resolve(project, "..", "..");
+const fixture = path.join(project, "tests", "fixtures", "binds.lua");
 const temp = await mkdtemp(path.join(os.tmpdir(), "hypr-keymap-ui-"));
 const output = path.join(temp, "index.html");
 const diagnosticSource = path.join(temp, "diagnostics.lua");
@@ -59,8 +59,8 @@ async function waitForValue(cdp, expression, timeout = 5000) {
 function generateHtml(outputPath, sourcePath) {
   return new Promise((resolve, reject) => {
     execFile(
-      path.join(repo, "mxbin", "hypr-keymap"),
-      ["-o", outputPath, sourcePath],
+      "uv",
+      ["run", "--offline", "--project", project, "hypr-keymap", "-o", outputPath, sourcePath],
       { env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } },
       (error) => (error ? reject(error) : resolve()),
     );
@@ -113,7 +113,7 @@ class Cdp {
 
 let chromium;
 try {
-  await generateHtml(output, path.join(repo, "hypr", "configs", "binds.lua"));
+  await generateHtml(output, fixture);
 
   const port = await freePort();
   chromium = spawn(
