@@ -12,7 +12,7 @@ from .models import HyprKeymapError, RawBinding
 LUA_EXTRACTOR = files("hypr_keymap.assets").joinpath("lua_extractor.lua").read_text(encoding="utf-8")
 
 def find_lua() -> str:
-    for command in ("lua", "lua5.4", "lua5.3", "luajit"):
+    for command in ("lua", "lua5.4", "lua5.3", "lua5.2", "luajit"):
         path = shutil.which(command)
         if path:
             return path
