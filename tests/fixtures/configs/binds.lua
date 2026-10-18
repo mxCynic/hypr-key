@@ -1,5 +1,6 @@
 local mainMod = "SUPER + "
 local functions = require("configs.function")
+local wrapper = require("configs.wrapper")
 
 hl.bind(mainMod .. "Q", hl.dsp.exec_cmd(functions.terminal), { description = "Open terminal" })
 hl.bind(mainMod .. "W", hl.dsp.window.float({ action = "toggle" }), { description = "Toggle floating window" })
@@ -8,6 +9,7 @@ hl.bind(mainMod .. "A", hl.dsp.exec_cmd("volume-up"), { description = "音量 +1
 hl.bind("F2", hl.dsp.exec_cmd("volume-down"), { locked = true, repeating = true, description = "降低音量" })
 hl.bind(mainMod .. "mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Drag window" })
 hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true, description = "Previous track" })
+wrapper.bind(mainMod .. "Y", "Wrapped binding", "true")
 
 hl.bind(mainMod .. "R", hl.dsp.submap("resize"), { description = "Enter resize mode" })
 hl.define_submap("resize", function()

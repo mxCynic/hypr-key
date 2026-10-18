@@ -257,6 +257,24 @@ try {
     `binding source is not the required module: ${moduleResolution.source}`,
   );
 
+  const wrappedBinding = await cdp.evaluate(`(() => {
+    [...document.querySelectorAll("[data-target]")].find(
+      (item) => item.dataset.target === "Y",
+    ).click();
+    return {
+      description: document.querySelector(".binding-title").firstChild?.textContent || "",
+      source: document.querySelector(".binding-meta span").textContent,
+    };
+  })()`);
+  assert(
+    wrappedBinding.description === "Wrapped binding",
+    `wrapped binding description is incorrect: ${wrappedBinding.description}`,
+  );
+  assert(
+    wrappedBinding.source.startsWith("configs/binds.lua:"),
+    `wrapped binding source is not the call site: ${wrappedBinding.source}`,
+  );
+
   const longKeyLabels = await cdp.evaluate(`(() => {
     const measure = (target) => {
       const button = [...document.querySelectorAll("[data-target]")].find(

@@ -148,10 +148,13 @@ local function proxy(path)
         __proxy_called = true,
       }
       return setmetatable(result, {
-        __index = function()
-          return function()
-            return result
+        __index = function(_, key)
+          if key == "set_enabled" then
+            return function()
+              return result
+            end
           end
+          return nil
         end,
       })
     end,
@@ -180,6 +183,8 @@ end
 
 local bindings = {}
 local current_submap = "global"
+local source_override_key = "__hypr_keymap_source"
+local line_override_key = "__hypr_keymap_line"
 
 local function binding_handle(record)
   local handle = {}
@@ -216,12 +221,29 @@ local hl = {
     local info = debug.getinfo(2, "Sl") or {}
     local action_data = action_info(action)
     local description = ""
+    local cleaned_options = {}
+    local source_override = nil
+    local line_override = nil
     if type(options) == "table" then
-      if type(options.description) == "string" then
-        description = options.description
-      elseif type(options.desc) == "string" then
-        description = options.desc
+      source_override = options[source_override_key]
+      line_override = options[line_override_key]
+      for key, value in pairs(options) do
+        if key ~= source_override_key and key ~= line_override_key then
+          cleaned_options[key] = value
+        end
       end
+      if type(cleaned_options.description) == "string" then
+        description = cleaned_options.description
+      elseif type(cleaned_options.desc) == "string" then
+        description = cleaned_options.desc
+      end
+    end
+    local info = debug.getinfo(2, "Sl") or {}
+    if source_override then
+      info = {
+        source = source_override,
+        currentline = line_override or info.currentline,
+      }
     end
     local record = {
       key = key,
@@ -231,7 +253,7 @@ local hl = {
       action_args = action_data.args,
       action_literal = action_data.literal,
       action_literal_type = action_data.literal_type,
-      options = type(options) == "table" and options or {},
+      options = cleaned_options,
       options_type = type(options),
       description = description,
       submap = current_submap,
@@ -300,6 +322,41 @@ local function glob_to_lua_pattern(pattern)
   return "^" .. escaped .. "$"
 end
 
+local unpack_values = table.unpack or unpack
+local shared_globals = {}
+local o_table = setmetatable({}, {
+  __newindex = function(target, key, value)
+    if key == "bind" and type(value) == "function" then
+      local helper_info = debug.getinfo(value, "S") or {}
+      local helper_source = helper_info.source
+      local original = value
+      value = function(...)
+        local args = { ... }
+        local caller = debug.getinfo(2, "Sl") or {}
+        if helper_source and caller.source == helper_source then
+          caller = debug.getinfo(3, "Sl") or caller
+        end
+
+        local options = args[4]
+        local wrapped_options = {}
+        if type(options) == "table" then
+          for option_key, option_value in pairs(options) do
+            wrapped_options[option_key] = option_value
+          end
+        end
+        if caller.source then
+          wrapped_options[source_override_key] = caller.source
+          wrapped_options[line_override_key] = caller.currentline
+        end
+        args[4] = wrapped_options
+        return original(unpack_values(args, 1, 4))
+      end
+    end
+    rawset(target, key, value)
+  end,
+})
+shared_globals.o = o_table
+
 local function make_environment(file_path, require_module)
   return setmetatable({
     hl = hl,
@@ -307,7 +364,15 @@ local function make_environment(file_path, require_module)
       return require_module(name, file_path)
     end,
   }, {
-    __index = _G,
+    __index = function(_, key)
+      if shared_globals[key] ~= nil then
+        return shared_globals[key]
+      end
+      return _G[key]
+    end,
+    __newindex = function(_, key, value)
+      shared_globals[key] = value
+    end,
   })
 end
 
