@@ -4,6 +4,8 @@ Generate an interactive, searchable, and diagnostic keyboard audit from a Hyprla
 
 `hypr-keymap` is designed for Hyprland setups that use Lua configuration files. It does not depend on a hard-coded keymap or manually maintained documentation. Binding descriptions come directly from Hyprland's native `description` field, while actions, commands, flags, submaps, and source locations are extracted from the real configuration.
 
+![hypr-keymap analyzing the Omarchy keymap](docs/omarchy-keymap.png)
+
 ## Why
 
 Hyprland Lua configurations are commonly split across multiple files with `require`. As a configuration grows, it becomes difficult to answer questions such as:
@@ -99,6 +101,53 @@ Use `--check` to run diagnostics in the terminal without generating HTML.
 ### Self-contained output
 
 The generated HTML embeds its styles, scripts, and binding data. It does not require a local server and does not access the network at runtime.
+
+## What it found in Omarchy
+
+The checked-in regression target is an Omarchy `quattro` snapshot pulled on
+2026-10-18 from commit
+[`a6dcc31b`](https://github.com/omacom/omarchy/tree/a6dcc31b6429fcf25e9e6bf90179f84c602cbf4e),
+release `v4.0.5`.
+
+`hypr-keymap` extracted 242 bindings and reported two potential duplicate
+groups:
+
+```text
+ALT + TAB
+  default/hypr/bindings/tiling.lua:55  Focus on next window
+  default/hypr/bindings/tiling.lua:57  Reveal active window on top
+
+ALT + SHIFT + TAB
+  default/hypr/bindings/tiling.lua:56  Focus on previous window
+  default/hypr/bindings/tiling.lua:58  Reveal active window on top
+```
+
+Omarchy intentionally stacks two dispatchers for each chord. The reverse
+chord has a known behavioral problem:
+
+- [Omarchy issue #7561: Alt+Shift+Tab cycles between only two windows](https://github.com/omacom/omarchy/issues/7561)
+- [Omarchy PR #8576: Cycle backwards through every window](https://github.com/omacom/omarchy/pull/8576)
+
+The issue explains that `cycle_next()` walks window z-order while
+`bring_to_top()` mutates the same order, causing reverse cycling to bounce
+between two windows. The proposed fix lowers the window being left before
+cycling backward.
+
+![Duplicate binding diagnostics for Omarchy](docs/omarchy-duplicates.png)
+
+## Related projects
+
+Other Hyprland keybinding tools I found take different approaches:
+
+- [HyprBind](https://github.com/ry2x/HyprBind) — simple keybinding viewer
+- [rofi-hyprland-keybinds-cheatsheet](https://github.com/jason9075/rofi-hyprland-keybinds-cheatsheet) — Rofi cheatsheet
+- [hyprland-keybind-menu](https://github.com/kolbenhans/hyprland-keybind-menu) — searchable and executable Lua keybind menu
+- [hyprkeybind-show](https://github.com/val7tools/hyprkeybind-show) — CLI keybinding listing with source locations
+- [OmarKEYs](https://github.com/romills/OmarKEYs) — live Hyprland keymap overlay
+
+`hypr-keymap` focuses on a self-contained browser view of the complete
+keyboard, Lua `require` graph analysis, submap navigation, flag-aware
+diagnostics, and English/Chinese UI.
 
 ## How it works
 
@@ -250,6 +299,10 @@ The repository includes an unmodified Omarchy Hyprland configuration snapshot
 pinned to commit `a6dcc31b6429fcf25e9e6bf90179f84c602cbf4e`. Its source,
 license, and reproduction notes are recorded in
 `tests/fixtures/omarchy/quattro/UPSTREAM.md`.
+
+- Pulled: 2026-10-18
+- Branch: `quattro`
+- Release at capture time: `v4.0.5`
 
 Run the regression assertions:
 
