@@ -470,6 +470,26 @@
         return found.length === 1 ? found[0].name : null;
       }
 
+      function submapExitForBinding(binding) {
+        if (
+          binding.submap !== activeSubmap
+          || !binding.action_path.endsWith(".submap")
+          || !Array.isArray(binding.action_args)
+          || !binding.action_args.length
+        ) {
+          return null;
+        }
+        return String(binding.action_args[0]);
+      }
+
+      function submapExitForTarget(target) {
+        if (viewMode !== "submap") return null;
+        const match = activeBindings().find(
+          (binding) => binding.key === target && submapExitForBinding(binding),
+        );
+        return match ? submapExitForBinding(match) : null;
+      }
+
       function mainKeyButtons() {
         return allButtons.filter((button) => button.classList.contains("key"));
       }
@@ -544,6 +564,15 @@
             ? activeBindings().flatMap((binding) => binding.mods)
             : [],
         );
+        const exitKeys = new Set();
+        const exitModifiers = new Set();
+        if (viewMode === "submap") {
+          activeBindings().forEach((binding) => {
+            if (!submapExitForBinding(binding)) return;
+            exitKeys.add(binding.key);
+            binding.mods.forEach((modifier) => exitModifiers.add(modifier));
+          });
+        }
         const activeMainTargets = [];
 
         allButtons.forEach((button) => {
@@ -554,8 +583,12 @@
           const isMember = MODIFIERS.includes(target)
             ? memberModifiers.has(target)
             : memberKeys.has(target);
+          const isExit = MODIFIERS.includes(target)
+            ? exitModifiers.has(target)
+            : exitKeys.has(target);
           button.classList.toggle("is-submap-entry", isEntry);
           button.classList.toggle("is-submap-member", isMember);
+          button.classList.toggle("is-submap-exit", isExit);
           button.classList.toggle(
             "is-context-dimmed",
             viewMode !== "all" && !isEntry && !isMember,
@@ -590,7 +623,9 @@
               const modeDescription = entrySubmap
                 ? `，Submap 入口，双击进入 ${entrySubmap}`
                 : viewMode === "submap"
-                  ? `，Submap ${activeSubmap} 成员`
+                  ? isExit
+                    ? `，Submap ${activeSubmap} 出口，双击返回全局`
+                    : `，Submap ${activeSubmap} 成员`
                   : "";
               button.setAttribute(
                 "aria-label",
@@ -600,6 +635,8 @@
               );
               button.title = entrySubmap
                 ? `${target}：双击进入 ${entrySubmap}`
+                : isExit
+                  ? `${target}：双击返回全局`
                 : count
                 ? `${target}：${shown.map((binding) => binding.title || "未提供 description").join("；")}`
                 : `${target}：未绑定`;
@@ -632,7 +669,7 @@
           text.textContent = `搜索：匹配 ${searchResults.length} 个绑定`;
         } else if (viewMode === "submap") {
           const count = submapByName.get(activeSubmap)?.binding_ids.length || 0;
-          text.textContent = `SUBMAP ${activeSubmap}：高亮 ${count} 个按键`;
+          text.textContent = `SUBMAP ${activeSubmap}：高亮 ${count} 个按键；双击橙色出口键返回`;
         }
       }
 
@@ -724,6 +761,15 @@
           }
         });
         button.addEventListener("dblclick", (event) => {
+          if (viewMode === "submap") {
+            const exitTarget = submapExitForTarget(target);
+            if (exitTarget) {
+              event.preventDefault();
+              if (exitTarget === "reset") returnToGlobal();
+              else enterSubmapContent(exitTarget);
+              return;
+            }
+          }
           if (viewMode !== "overview") return;
           const submap = submapForEntryTarget(target);
           if (submap) {

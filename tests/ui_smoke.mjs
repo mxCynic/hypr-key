@@ -199,6 +199,27 @@ try {
   assert(layout.overflowHintHidden, "overflow hint should be hidden when keyboard fits");
   assert(layout.submapsCollapsed, "large submap list should start collapsed");
 
+  const submapExit = await cdp.evaluate(`(() => {
+    document.querySelector(".submap-toggle").click();
+    const card = [...document.querySelectorAll(".submap-card")].find((item) => item.innerText.includes("resize"));
+    card.click();
+    const exitKey = [...document.querySelectorAll(".key")].find((item) => item.dataset.target === "R");
+    const exitMarked = exitKey.classList.contains("is-submap-exit");
+    exitKey.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    return {
+      exitMarked,
+      modeBarHidden: document.querySelector("#keyboard-filter").hidden,
+    };
+  })()`);
+  assert(submapExit.exitMarked, "submap exit key was not marked");
+  assert(submapExit.modeBarHidden, "double-clicking submap exit did not return to global view");
+
+  await cdp.evaluate(`(() => {
+    const input = document.querySelector("#bind-search");
+    input.value = "音量";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  })()`);
+
   await cdp.call("Emulation.setDeviceMetricsOverride", {
     width: 390,
     height: 844,

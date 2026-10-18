@@ -13,6 +13,10 @@ Search from the page with `/` or `Ctrl+K`. Supported field filters include
 Chord searches accept equivalent spellings such as `SUPER A`, `SUPER + A`,
 `super+a` and `key:super+a`.
 
+In submap member view, entry keys support double-click navigation and reset
+keys are shown with an orange outline; double-clicking an exit key returns to
+the global keyboard.
+
 Run the browser smoke test with:
 
 ```bash
