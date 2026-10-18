@@ -39,13 +39,32 @@ __STYLE__
           <div><p class="kicker">ANSI / KEYMAP</p><h2>点击一个按键</h2></div>
           <p class="current">当前选择<strong id="current-selection">A</strong></p>
         </div>
-        <div class="search-toolbar">
-          <label class="search-box">
-            <span>搜索</span>
-            <input id="bind-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="binding-list" aria-expanded="false" aria-haspopup="listbox" placeholder="描述、组合键、命令、submap、flags" autocomplete="off">
-          </label>
-          <button type="button" id="search-clear" hidden>清除</button>
-          <span class="search-count" id="search-count"></span>
+        <div class="search-area">
+          <div class="search-toolbar">
+            <label class="search-box">
+              <span>搜索</span>
+              <input id="bind-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false" aria-haspopup="listbox" placeholder="描述、组合键、命令、submap、flags" autocomplete="off">
+            </label>
+            <button type="button" id="search-clear" hidden>清除</button>
+            <span class="search-count" id="search-count"></span>
+          </div>
+          <div class="search-popover" id="search-popover" hidden>
+            <div class="search-popover-head">
+              <span>匹配结果</span>
+              <span id="search-popover-count"></span>
+              <button type="button" id="search-popover-close" aria-label="关闭搜索结果">Esc</button>
+            </div>
+            <div id="search-results" role="listbox" aria-label="搜索匹配结果"></div>
+          </div>
+          <div class="search-filters" id="search-filters" aria-label="搜索筛选">
+            <button type="button" class="search-filter is-active" data-filter="all">全部</button>
+            <button type="button" class="search-filter" data-filter="global">全局</button>
+            <button type="button" class="search-filter" data-filter="submap">当前 submap</button>
+            <button type="button" class="search-filter" data-filter="flags">有 flags</button>
+            <button type="button" class="search-filter" data-filter="duplicates">重复项</button>
+            <button type="button" class="search-filter" data-filter="keyboard">键盘</button>
+            <button type="button" class="search-filter" data-filter="mouse">鼠标</button>
+          </div>
         </div>
         <div class="submap-index" id="submap-index"></div>
         <div class="keyboard-filter" id="keyboard-filter" hidden>

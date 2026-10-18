@@ -25,7 +25,22 @@ Baseline: 163 bindings, 14 submaps, 641 DOM nodes.
 
 | ID | Issue | Status |
 |---|---|---|
-| P2-1 | Search/submap/selected-key state is not stored in URL history | Pending — browser Back cannot restore the prior page state |
+| P2-1 | Search/submap/selected-key state is not stored in URL history | Done — `q`, `filter`, `submap`, `key` are stored in the hash; Back restores search state |
 | P2-2 | A few empty states interpolate config-derived names through `innerHTML` | Pending — low risk for trusted local configs, but should use `textContent` |
-| P2-3 | No automated browser regression tests | Pending — current checks are manual headless-Chromium/CDP runs |
+| P2-3 | No automated browser regression tests | Done — `tests/ui_smoke.mjs` covers popover, selection, fields, filters, URL, layout, collapse and mobile drawer |
+
+## Search command palette
+
+| Step | Feature | Status |
+|---|---|---|
+| 1 | Compact results anchored below the search input | Done |
+| 2 | Query retained after selecting a result | Done |
+| 3 | Active result auto-scrolls into view | Done |
+| 4 | `/`, `Ctrl+K`, arrow keys and Esc shortcuts | Done |
+| 5 | Mobile fixed result drawer | Done |
+| 6 | Field syntax (`key:`, `submap:`, `flag:`, `device:`, `command:`, `action:`) | Done |
+| 7 | Weighted ranking and match highlighting | Done — chord spellings with/without `+` normalize to the same key combination |
+| 8 | Filter chips for context, flags, duplicates and device | Done |
+| 9 | URL/hash state with browser Back support | Done |
+| 10 | Automated Chromium regression smoke test | Done |
 

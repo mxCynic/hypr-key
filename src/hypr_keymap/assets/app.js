@@ -83,8 +83,11 @@
       let searchQuery = "";
       let searchResults = [];
       let activeSearchResult = 0;
+      let searchFilter = "all";
+      let searchOpen = false;
       let rovingKeyTarget = defaultTarget;
       let submapsExpanded = data.submaps.length <= 6;
+      let restoringUrl = false;
 
       const targetFor = (id) => MOD_TARGETS[id] || id;
       const keyLabel = (binding) => binding.raw_key && binding.raw_key.startsWith("code:") ? binding.key : binding.key;
@@ -123,56 +126,316 @@
       function resetSearchState() {
         searchQuery = "";
         searchResults = [];
+        searchFilter = "all";
+        searchOpen = false;
+        activeSearchResult = 0;
         document.querySelector("#bind-search").value = "";
         document.querySelector("#bind-search").setAttribute("aria-expanded", "false");
         document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
         document.querySelector("#search-clear").hidden = true;
         document.querySelector("#search-count").textContent = `${bindings.length} BINDS`;
+        closeSearchPopover();
+        updateSearchFilterButtons();
       }
 
-      function bindingSearchText(binding) {
-        return [
-          binding.title,
-          binding.short,
-          binding.combo,
-          binding.raw_key,
-          binding.command,
-          binding.action_path,
-          binding.submap,
-          binding.device_scope,
-          ...binding.flags,
-        ].join("\n").toLowerCase();
+      function parseSearchTerms(value) {
+        return (value.match(/(?:[^\s"]+|"[^"]*")+/g) || []).map((term) =>
+          term.replace(/^"|"$/g, ""),
+        );
+      }
+
+      function isChordToken(token) {
+        const value = token.toLowerCase();
+        return MODIFIERS.includes(value.toUpperCase())
+          || /^f(?:[1-9]|1[0-2])$/.test(value)
+          || /^[a-z0-9;,./\\'\[\]`=-]$/.test(value)
+          || ["space", "tab", "escape", "print", "enter", "backspace", "delete", "insert", "home", "end", "page_up", "page_down", "arrow_up", "arrow_down", "arrow_left", "arrow_right"].includes(value)
+          || /^mouse(?::|_)/.test(value)
+          || /^xf86/.test(value);
+      }
+
+      function parseChordQuery(value) {
+        const tokens = value
+          .trim()
+          .toLowerCase()
+          .replace(/\+/g, " ")
+          .split(/\s+/)
+          .filter(Boolean);
+        return tokens.length >= 2 && tokens.every(isChordToken) ? tokens : null;
+      }
+
+      function bindingKeyTokens(binding) {
+        return [...binding.mods, binding.key].map((token) => token.toLowerCase());
+      }
+
+      function bindingSearchValues(binding) {
+        return {
+          key: `${binding.combo} ${binding.raw_key} ${binding.key}`.toLowerCase(),
+          desc: `${binding.title} ${binding.short}`.toLowerCase(),
+          submap: binding.submap.toLowerCase(),
+          flag: binding.flags.join(" ").toLowerCase(),
+          device: binding.device_scope.toLowerCase(),
+          command: binding.command.toLowerCase(),
+          action: binding.action_path.toLowerCase(),
+        };
+      }
+
+      function bindingMatchesTerm(binding, term) {
+        const values = bindingSearchValues(binding);
+        const colon = term.indexOf(":");
+        const rawField = colon > 0 ? term.slice(0, colon).toLowerCase() : "";
+        const aliases = { description: "desc", flags: "flag" };
+        const field = aliases[rawField] || rawField;
+        const value = (colon > 0 && values[field] !== undefined ? term.slice(colon + 1) : term).toLowerCase();
+        if (!value) return true;
+        if (field === "key" && values[field] !== undefined) {
+          const chord = parseChordQuery(value);
+          if (chord) {
+            const keyTokens = bindingKeyTokens(binding);
+            return chord.every((token) => keyTokens.includes(token));
+          }
+          return values.key.replace(/\s+/g, "").includes(value.replace(/\s+/g, ""));
+        }
+        return (values[field] || Object.values(values).join("\n")).includes(value);
+      }
+
+      function searchFilterMatches(binding) {
+        if (searchFilter === "global") {
+          return binding.submap_universal || binding.submap === "global";
+        }
+        if (searchFilter === "submap") {
+          return Boolean(activeSubmap) && binding.submap === activeSubmap;
+        }
+        if (searchFilter === "flags") return binding.flags.length > 0;
+        if (searchFilter === "duplicates") return binding.duplicate_group !== null;
+        if (searchFilter === "keyboard") return binding.device === "keyboard";
+        if (searchFilter === "mouse") return binding.device === "mouse";
+        return true;
+      }
+
+      function searchScore(binding, query, terms) {
+        const compact = query.replace(/\s+/g, "").toLowerCase();
+        const combo = binding.combo.replace(/\s+/g, "").toLowerCase();
+        const title = (binding.title || "").toLowerCase();
+        const command = binding.command.toLowerCase();
+        let score = 0;
+        const chord = parseChordQuery(query);
+        if (chord) {
+          const keyTokens = bindingKeyTokens(binding);
+          if (keyTokens.length === chord.length) score += 200;
+          else score += Math.max(1, 100 - keyTokens.length * 5);
+        }
+        if (compact && combo === compact) score += 100;
+        if (compact && binding.key.toLowerCase() === compact) score += 80;
+        if (query && title === query) score += 70;
+        else if (query && title.startsWith(query)) score += 50;
+        else if (query && title.includes(query)) score += 30;
+        if (query && command.includes(query)) score += 10;
+        score += terms.length * 2;
+        return score;
+      }
+
+      function computeSearchResults(value) {
+        const query = value.trim().toLowerCase();
+        const terms = parseSearchTerms(query);
+        const chord = parseChordQuery(query);
+        return bindings
+          .filter(searchFilterMatches)
+          .filter((binding) => {
+            if (chord) {
+              const keyTokens = bindingKeyTokens(binding);
+              return chord.every((token) => keyTokens.includes(token));
+            }
+            return terms.every((term) => bindingMatchesTerm(binding, term));
+          })
+          .map((binding) => ({ binding, score: searchScore(binding, query, terms) }))
+          .sort((left, right) => right.score - left.score || left.binding.line - right.binding.line)
+          .map((item) => item.binding);
+      }
+
+      function appendHighlightedText(parent, text, terms) {
+        const plainTerms = terms
+          .filter((term) => !term.includes(":"))
+          .sort((left, right) => right.length - left.length);
+        if (!plainTerms.length) {
+          parent.textContent = text;
+          return;
+        }
+        const escaped = plainTerms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        const parts = text.split(new RegExp(`(${escaped.join("|")})`, "gi"));
+        parts.forEach((part) => {
+          if (plainTerms.some((term) => part.toLowerCase() === term.toLowerCase())) {
+            const mark = document.createElement("mark");
+            mark.textContent = part;
+            parent.append(mark);
+          } else if (part) {
+            parent.append(document.createTextNode(part));
+          }
+        });
+      }
+
+      function closeSearchPopover() {
+        searchOpen = false;
+        document.querySelector("#search-popover").hidden = true;
+        document.querySelector("#bind-search").setAttribute("aria-expanded", "false");
+        document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
+      }
+
+      function openSearchPopover() {
+        if (!searchQuery && searchFilter === "all") return;
+        searchOpen = true;
+        document.querySelector("#search-popover").hidden = false;
+        document.querySelector("#bind-search").setAttribute("aria-expanded", "true");
+        renderSearchPopover();
+        setActiveSearchResult(activeSearchResult);
+      }
+
+      function renderSearchPopover() {
+        const root = document.querySelector("#search-results");
+        root.replaceChildren();
+        document.querySelector("#search-popover-count").textContent = `${searchResults.length} 条`;
+        if (!searchResults.length) {
+          const empty = document.createElement("div");
+          empty.className = "search-popover-empty";
+          empty.textContent = "没有匹配项";
+          root.append(empty);
+          return;
+        }
+        const terms = parseSearchTerms(searchQuery);
+        searchResults.forEach((binding, index) => {
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "search-result-row";
+          row.id = `search-option-${binding.id}`;
+          row.setAttribute("role", "option");
+          row.setAttribute("aria-selected", String(index === activeSearchResult));
+          row.classList.toggle("is-active", index === activeSearchResult);
+          const combo = document.createElement("span");
+          combo.className = "search-result-combo";
+          combo.textContent = binding.combo;
+          const copy = document.createElement("span");
+          copy.className = "search-result-copy";
+          const title = document.createElement("strong");
+          appendHighlightedText(title, binding.title || "未提供 description", terms);
+          const detail = document.createElement("span");
+          detail.textContent = `${displaySubmap(binding.submap, binding.submap_universal)} · ${displayTrigger(binding.trigger_label)}`;
+          copy.append(title, detail);
+          const meta = document.createElement("span");
+          meta.className = "search-result-meta";
+          meta.textContent = binding.flags.length
+            ? binding.flags.filter((flag) => flag !== "submap_universal").join(" · ")
+            : binding.device_scope;
+          row.append(combo, copy, meta);
+          row.addEventListener("click", () => commitSearchResult(binding));
+          root.append(row);
+        });
+      }
+
+      function setActiveSearchResult(index) {
+        const rows = [...document.querySelectorAll("#search-results .search-result-row")];
+        if (!rows.length) {
+          document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
+          return;
+        }
+        activeSearchResult = Math.max(0, Math.min(rows.length - 1, index));
+        rows.forEach((row, rowIndex) => {
+          const active = rowIndex === activeSearchResult;
+          row.classList.toggle("is-active", active);
+          row.setAttribute("aria-selected", String(active));
+        });
+        const active = rows[activeSearchResult];
+        document.querySelector("#bind-search").setAttribute("aria-activedescendant", active.id);
+        if (searchOpen) active.scrollIntoView({ block: "nearest" });
       }
 
       function applySearch(value) {
         searchQuery = value.trim().toLowerCase();
-        document.querySelector("#search-clear").hidden = !searchQuery;
-        if (!searchQuery) {
+        document.querySelector("#search-clear").hidden = !value.trim();
+        if (!searchQuery && searchFilter === "all") {
           resetSearchState();
           viewMode = "all";
           activeSubmap = null;
           selectedTarget = defaultTarget;
           renderDetail();
+          syncUrl(false);
           return;
         }
-        searchResults = bindings.filter((binding) => bindingSearchText(binding).includes(searchQuery));
+        searchResults = computeSearchResults(value);
         viewMode = "search";
-        activeSubmap = null;
         selectedTarget = null;
         activeSearchResult = 0;
-        document.querySelector("#bind-search").setAttribute("aria-expanded", "true");
         document.querySelector("#search-count").textContent = `${searchResults.length} / ${bindings.length}`;
         renderDetail();
-        setActiveSearchResult(0);
+        openSearchPopover();
+        syncUrl(false);
       }
 
       function commitSearchResult(binding) {
-        resetSearchState();
-        viewMode = "all";
-        activeSubmap = null;
+        viewMode = "search";
         selectedTarget = binding.key;
+        closeSearchPopover();
         renderDetail();
         document.querySelector("#detail-title").focus();
+        syncUrl(true);
+      }
+
+      function updateSearchFilterButtons() {
+        document.querySelectorAll(".search-filter").forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.filter === searchFilter);
+          button.disabled = button.dataset.filter === "submap" && !activeSubmap;
+        });
+      }
+
+      function syncUrl(push = false) {
+        if (restoringUrl) return;
+        const params = new URLSearchParams();
+        if (searchQuery) params.set("q", searchQuery);
+        if (searchFilter !== "all") params.set("filter", searchFilter);
+        if (viewMode === "submap" && activeSubmap) params.set("submap", activeSubmap);
+        if (viewMode === "overview") params.set("view", "submaps");
+        if (selectedTarget) params.set("key", selectedTarget);
+        const hash = params.toString();
+        const url = `${location.pathname}${location.search}${hash ? `#${hash}` : ""}`;
+        try {
+          history[push ? "pushState" : "replaceState"]({}, "", url);
+        } catch {
+          // Some local-file browser configurations disallow history changes.
+        }
+      }
+
+      function restoreFromUrl() {
+        if (!location.hash) return;
+        restoringUrl = true;
+        const params = new URLSearchParams(location.hash.slice(1));
+        resetSearchState();
+        searchFilter = params.get("filter") || "all";
+        const submap = params.get("submap");
+        const key = params.get("key");
+        const query = params.get("q") || "";
+        if (submap && submapByName.has(submap)) {
+          viewMode = "submap";
+          activeSubmap = submap;
+          selectedTarget = key || submapByName.get(submap)?.binding_ids
+            .map((id) => bindingById.get(id))
+            .find(Boolean)?.key || null;
+        } else if (params.get("view") === "submaps") {
+          viewMode = "overview";
+          activeSubmap = null;
+          selectedTarget = null;
+        } else if (query || searchFilter !== "all") {
+          document.querySelector("#bind-search").value = query;
+          searchQuery = query.toLowerCase();
+          searchResults = computeSearchResults(query);
+          viewMode = "search";
+          selectedTarget = key || null;
+        } else {
+          viewMode = "all";
+          activeSubmap = null;
+          selectedTarget = key || defaultTarget;
+        }
+        updateSearchFilterButtons();
+        renderDetail();
+        restoringUrl = false;
       }
 
       function displayMatches(target) {
@@ -379,6 +642,7 @@
         activeSubmap = null;
         selectedTarget = null;
         renderDetail();
+        syncUrl(true);
       }
 
       function enterSubmapContent(name) {
@@ -389,7 +653,9 @@
           .map((id) => bindingById.get(id))
           .find(Boolean);
         selectedTarget = first?.key || null;
+        updateSearchFilterButtons();
         renderDetail();
+        syncUrl(true);
       }
 
       function returnToGlobal() {
@@ -398,6 +664,7 @@
         activeSubmap = null;
         selectedTarget = defaultTarget;
         renderDetail();
+        syncUrl(true);
       }
 
       function makeKey(definition) {
@@ -675,38 +942,6 @@
         return element;
       }
 
-      function focusSearchResult(card, offset) {
-        const cards = [...document.querySelectorAll("#binding-list .binding-card")];
-        const current = cards.indexOf(card);
-        if (current < 0 || !cards.length) return;
-        const next = offset === "first"
-          ? 0
-          : offset === "last"
-            ? cards.length - 1
-            : Math.max(0, Math.min(cards.length - 1, current + offset));
-        cards.forEach((item, index) => {
-          item.tabIndex = index === next ? 0 : -1;
-        });
-        cards[next].focus();
-      }
-
-      function setActiveSearchResult(index) {
-        const cards = [...document.querySelectorAll("#binding-list .binding-card")];
-        const input = document.querySelector("#bind-search");
-        if (!cards.length) {
-          input.removeAttribute("aria-activedescendant");
-          return;
-        }
-        activeSearchResult = Math.max(0, Math.min(cards.length - 1, index));
-        const card = cards[activeSearchResult];
-        input.setAttribute("aria-activedescendant", card.id);
-        cards.forEach((item, itemIndex) => {
-          const active = itemIndex === activeSearchResult;
-          item.classList.toggle("is-active", active);
-          item.setAttribute("aria-selected", String(active));
-        });
-      }
-
       function announceDetail(message) {
         const live = document.querySelector("#detail-live");
         live.textContent = "";
@@ -715,46 +950,9 @@
         }, 0);
       }
 
-      function bindingCard(binding, searchIndex = null) {
+      function bindingCard(binding) {
         const card = document.createElement("article");
         card.className = "binding-card";
-        if (searchIndex !== null) {
-          card.classList.add("search-result");
-          card.id = `search-result-${binding.id}`;
-          card.tabIndex = searchIndex === 0 ? 0 : -1;
-          card.setAttribute("role", "option");
-          card.setAttribute("aria-selected", String(searchIndex === 0));
-          const openResult = () => {
-            commitSearchResult(binding);
-          };
-          card.addEventListener("click", openResult);
-          card.addEventListener("keydown", (event) => {
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              focusSearchResult(card, 1);
-            } else if (event.key === "ArrowUp") {
-              event.preventDefault();
-              focusSearchResult(card, -1);
-            } else if (event.key === "Home") {
-              event.preventDefault();
-              focusSearchResult(card, "first");
-            } else if (event.key === "End") {
-              event.preventDefault();
-              focusSearchResult(card, "last");
-            } else if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              openResult();
-            }
-          });
-          card.addEventListener("focus", () => {
-            const cards = [...document.querySelectorAll("#binding-list .binding-card")];
-            cards.forEach((item) => {
-              item.tabIndex = item === card ? 0 : -1;
-            });
-            const index = cards.indexOf(card);
-            setActiveSearchResult(index);
-          });
-        }
         card.classList.toggle("is-duplicate", binding.duplicate_group !== null);
         card.append(combo(binding));
 
@@ -843,27 +1041,23 @@
 
       function renderDetail() {
         const list = document.querySelector("#binding-list");
-        if (viewMode === "search" && searchQuery && selectedTarget === null) {
-          list.setAttribute("role", "listbox");
-          list.setAttribute("aria-label", "搜索结果");
+        if (viewMode === "search" && selectedTarget === null) {
+          list.removeAttribute("role");
+          list.removeAttribute("aria-label");
           document.querySelector("#selected-cap").textContent = "⌕";
           document.querySelector("#current-selection").textContent = "—";
-          document.querySelector("#detail-title").textContent = "搜索结果";
+          document.querySelector("#detail-title").textContent = "搜索匹配";
           document.querySelector("#detail-count").textContent = `${searchResults.length} BINDS`;
           document.querySelector("#detail-eyebrow").textContent = "SEARCH";
-          document.querySelector("#detail-subtitle").textContent = `“${searchQuery}” 匹配描述、按键、命令、submap 或 flags`;
+          document.querySelector("#detail-subtitle").textContent = searchQuery
+            ? `“${searchQuery}” 的结果已显示在搜索框下方`
+            : "筛选结果已显示在搜索框下方";
           announceDetail(`搜索结果，共 ${searchResults.length} 个绑定`);
           list.replaceChildren();
-          if (!searchResults.length) {
-            const empty = document.createElement("div");
-            empty.className = "empty";
-            empty.innerHTML = `<div><strong>没有匹配的绑定。</strong>尝试更短的描述、按键名称或 flag。</div>`;
-            list.append(empty);
-          } else {
-            searchResults.forEach((binding, index) => {
-              list.append(bindingCard(binding, index));
-            });
-          }
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.innerHTML = `<div><strong>${searchResults.length ? "从搜索面板选择一个结果。" : "没有匹配的绑定。"}</strong>使用上下键移动，Enter 打开详情。</div>`;
+          list.append(empty);
           updateStyles();
           updateKeyboardHighlights();
           updateModeBar();
@@ -937,11 +1131,11 @@
 
       function select(target) {
         if (viewMode === "search") {
-          document.querySelector("#bind-search").setAttribute("aria-expanded", "false");
-          document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
+          closeSearchPopover();
         }
         selectedTarget = target;
         renderDetail();
+        syncUrl(false);
         if (window.matchMedia("(max-width: 960px)").matches) {
           document.querySelector(".detail").scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -977,23 +1171,34 @@
       document.querySelector("#keyboard-filter-back").addEventListener("click", returnToGlobal);
       const searchInput = document.querySelector("#bind-search");
       searchInput.addEventListener("input", (event) => applySearch(event.target.value));
+      searchInput.addEventListener("focus", () => {
+        if (searchQuery || searchFilter !== "all") openSearchPopover();
+      });
       searchInput.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           applySearch("");
           searchInput.blur();
         } else if (event.key === "ArrowDown" && searchResults.length) {
           event.preventDefault();
+          if (!searchOpen) {
+            openSearchPopover();
+            setActiveSearchResult(0);
+            return;
+          }
           if (selectedTarget !== null) {
             selectedTarget = null;
-            searchInput.setAttribute("aria-expanded", "true");
             renderDetail();
           }
           setActiveSearchResult(activeSearchResult + 1);
         } else if (event.key === "ArrowUp" && searchResults.length) {
           event.preventDefault();
+          if (!searchOpen) {
+            openSearchPopover();
+            setActiveSearchResult(searchResults.length - 1);
+            return;
+          }
           if (selectedTarget !== null) {
             selectedTarget = null;
-            searchInput.setAttribute("aria-expanded", "true");
             renderDetail();
           }
           setActiveSearchResult(activeSearchResult - 1);
@@ -1006,5 +1211,36 @@
         applySearch("");
         searchInput.focus();
       });
+      document.querySelector("#search-popover-close").addEventListener("click", () => {
+        closeSearchPopover();
+        searchInput.focus();
+      });
+      document.querySelectorAll(".search-filter").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (button.disabled) return;
+          searchFilter = button.dataset.filter;
+          updateSearchFilterButtons();
+          applySearch(searchInput.value);
+          searchInput.focus();
+        });
+      });
+      document.addEventListener("keydown", (event) => {
+        const target = event.target;
+        const typing = target instanceof HTMLInputElement
+          || target instanceof HTMLTextAreaElement
+          || target.isContentEditable;
+        if (!typing && (event.key === "/" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k"))) {
+          event.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+          if (searchQuery || searchFilter !== "all") openSearchPopover();
+        }
+      });
+      document.addEventListener("click", (event) => {
+        if (!event.target.closest(".search-area")) closeSearchPopover();
+      });
+      window.addEventListener("popstate", restoreFromUrl);
+      updateSearchFilterButtons();
       renderDetail();
+      restoreFromUrl();
     })();

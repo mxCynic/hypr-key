@@ -6,6 +6,19 @@ Generate a self-contained HTML audit of a Hyprland Lua key binding file.
 uv run --project tools/hypr-keymap hypr-keymap --open
 ```
 
+Search from the page with `/` or `Ctrl+K`. Supported field filters include
+`key:super+r`, `submap:resize`, `flag:repeating`, `device:`, `command:` and
+`action:`.
+
+Chord searches accept equivalent spellings such as `SUPER A`, `SUPER + A`,
+`super+a` and `key:super+a`.
+
+Run the browser smoke test with:
+
+```bash
+node tools/hypr-keymap/tests/ui_smoke.mjs
+```
+
 The `mxbin/hypr-keymap` launcher uses the same package directly, so deployment
 does not require a virtual environment or network access.
 
