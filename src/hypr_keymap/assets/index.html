@@ -42,7 +42,7 @@ __STYLE__
         <div class="search-toolbar">
           <label class="search-box">
             <span>搜索</span>
-            <input id="bind-search" type="search" placeholder="描述、组合键、命令、submap、flags" autocomplete="off">
+            <input id="bind-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="binding-list" aria-expanded="false" aria-haspopup="listbox" placeholder="描述、组合键、命令、submap、flags" autocomplete="off">
           </label>
           <button type="button" id="search-clear" hidden>清除</button>
           <span class="search-count" id="search-count"></span>
@@ -58,6 +58,7 @@ __STYLE__
             <span class="case-status"><i></i> GENERATED</span>
           </div>
           <div class="keyboard-scroll"><div class="keyboard" id="keyboard" role="grid" aria-label="Hyprland 键盘"></div></div>
+          <p class="keyboard-overflow-hint" id="keyboard-overflow-hint" hidden>当前宽度不足，可横向滚动查看完整键盘</p>
           <div class="extra">
             <div class="extra-head"><span>系统功能键</span><span>媒体 / 亮度</span></div>
             <div class="extra-row" id="extra-keys"></div>
@@ -74,8 +75,9 @@ __STYLE__
         </p>
       </section>
 
-      <aside class="panel detail" aria-live="polite">
+      <aside class="panel detail">
         <div class="detail-topline"><span>SELECTED KEY</span><span id="detail-count">—</span></div>
+        <p class="sr-only" id="detail-live" aria-live="polite" aria-atomic="true"></p>
         <div class="selected-head">
           <div class="selected-cap" id="selected-cap">A</div>
           <div>

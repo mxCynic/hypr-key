@@ -16,8 +16,16 @@ Baseline: 163 bindings, 14 submaps, 641 DOM nodes.
 
 | ID | Issue | Status |
 |---|---|---|
-| P1-1 | Keyboard needs horizontal scrolling at 1366px and below | Pending |
-| P1-2 | Large submap collections still consume first-screen space | Pending |
-| P1-3 | `aria-live` wraps the entire detail panel | Pending |
-| P1-4 | Search lacks standard combobox/listbox semantics | Partially done — results are a keyboard-navigable listbox; combobox relationship/expanded state remain |
+| P1-1 | Keyboard needs horizontal scrolling at 1366px and below | Done — keyboard auto-fits at 1440/1366; narrower layouts show an explicit horizontal-scroll hint |
+| P1-2 | Large submap collections still consume first-screen space | Done — lists over 6 submaps collapse by default; 14-submap case moves keyboard top from ~638px to ~486px |
+| P1-3 | `aria-live` wraps the entire detail panel | Done — detail panel is no longer live; a visually hidden status region announces concise updates |
+| P1-4 | Search lacks standard combobox/listbox semantics | Done — combobox controls the listbox, tracks `aria-expanded`/`aria-activedescendant`, supports arrows, and closes on selection |
+
+## P2
+
+| ID | Issue | Status |
+|---|---|---|
+| P2-1 | Search/submap/selected-key state is not stored in URL history | Pending — browser Back cannot restore the prior page state |
+| P2-2 | A few empty states interpolate config-derived names through `innerHTML` | Pending — low risk for trusted local configs, but should use `textContent` |
+| P2-3 | No automated browser regression tests | Pending — current checks are manual headless-Chromium/CDP runs |
 

@@ -82,7 +82,9 @@
       let activeSubmap = null;
       let searchQuery = "";
       let searchResults = [];
+      let activeSearchResult = 0;
       let rovingKeyTarget = defaultTarget;
+      let submapsExpanded = data.submaps.length <= 6;
 
       const targetFor = (id) => MOD_TARGETS[id] || id;
       const keyLabel = (binding) => binding.raw_key && binding.raw_key.startsWith("code:") ? binding.key : binding.key;
@@ -122,6 +124,8 @@
         searchQuery = "";
         searchResults = [];
         document.querySelector("#bind-search").value = "";
+        document.querySelector("#bind-search").setAttribute("aria-expanded", "false");
+        document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
         document.querySelector("#search-clear").hidden = true;
         document.querySelector("#search-count").textContent = `${bindings.length} BINDS`;
       }
@@ -155,8 +159,20 @@
         viewMode = "search";
         activeSubmap = null;
         selectedTarget = null;
+        activeSearchResult = 0;
+        document.querySelector("#bind-search").setAttribute("aria-expanded", "true");
         document.querySelector("#search-count").textContent = `${searchResults.length} / ${bindings.length}`;
         renderDetail();
+        setActiveSearchResult(0);
+      }
+
+      function commitSearchResult(binding) {
+        resetSearchState();
+        viewMode = "all";
+        activeSubmap = null;
+        selectedTarget = binding.key;
+        renderDetail();
+        document.querySelector("#detail-title").focus();
       }
 
       function displayMatches(target) {
@@ -571,7 +587,17 @@
         const root = document.querySelector("#submap-index");
         const head = document.createElement("div");
         head.className = "submap-index-head";
-        head.innerHTML = `<span>SUBMAP 导航</span><span>${data.submaps.length} 个 submap</span>`;
+        head.innerHTML = `<span>SUBMAP 导航</span><span class="submap-head-actions"><span>${data.submaps.length} 个 submap</span></span>`;
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "submap-toggle";
+        toggle.textContent = submapsExpanded ? "收起" : "展开";
+        toggle.addEventListener("click", () => {
+          submapsExpanded = !submapsExpanded;
+          list.hidden = !submapsExpanded;
+          toggle.textContent = submapsExpanded ? "收起" : "展开";
+        });
+        head.querySelector(".submap-head-actions").append(toggle);
 
         const overview = document.createElement("button");
         overview.type = "button";
@@ -593,6 +619,7 @@
 
         const list = document.createElement("div");
         list.className = "submap-list";
+        list.hidden = !submapsExpanded;
         data.submaps.forEach((submap) => {
           const entries = submap.entry_binding_ids
             .map((id) => bindingById.get(id))
@@ -663,17 +690,42 @@
         cards[next].focus();
       }
 
+      function setActiveSearchResult(index) {
+        const cards = [...document.querySelectorAll("#binding-list .binding-card")];
+        const input = document.querySelector("#bind-search");
+        if (!cards.length) {
+          input.removeAttribute("aria-activedescendant");
+          return;
+        }
+        activeSearchResult = Math.max(0, Math.min(cards.length - 1, index));
+        const card = cards[activeSearchResult];
+        input.setAttribute("aria-activedescendant", card.id);
+        cards.forEach((item, itemIndex) => {
+          const active = itemIndex === activeSearchResult;
+          item.classList.toggle("is-active", active);
+          item.setAttribute("aria-selected", String(active));
+        });
+      }
+
+      function announceDetail(message) {
+        const live = document.querySelector("#detail-live");
+        live.textContent = "";
+        window.setTimeout(() => {
+          live.textContent = message;
+        }, 0);
+      }
+
       function bindingCard(binding, searchIndex = null) {
         const card = document.createElement("article");
         card.className = "binding-card";
         if (searchIndex !== null) {
           card.classList.add("search-result");
+          card.id = `search-result-${binding.id}`;
           card.tabIndex = searchIndex === 0 ? 0 : -1;
           card.setAttribute("role", "option");
           card.setAttribute("aria-selected", String(searchIndex === 0));
           const openResult = () => {
-            select(binding.key);
-            document.querySelector("#detail-title").focus();
+            commitSearchResult(binding);
           };
           card.addEventListener("click", openResult);
           card.addEventListener("keydown", (event) => {
@@ -695,10 +747,12 @@
             }
           });
           card.addEventListener("focus", () => {
-            document.querySelectorAll("#binding-list .binding-card").forEach((item) => {
+            const cards = [...document.querySelectorAll("#binding-list .binding-card")];
+            cards.forEach((item) => {
               item.tabIndex = item === card ? 0 : -1;
-              item.setAttribute("aria-selected", String(item === card));
             });
+            const index = cards.indexOf(card);
+            setActiveSearchResult(index);
           });
         }
         card.classList.toggle("is-duplicate", binding.duplicate_group !== null);
@@ -789,7 +843,7 @@
 
       function renderDetail() {
         const list = document.querySelector("#binding-list");
-        if (viewMode === "search" && searchQuery) {
+        if (viewMode === "search" && searchQuery && selectedTarget === null) {
           list.setAttribute("role", "listbox");
           list.setAttribute("aria-label", "搜索结果");
           document.querySelector("#selected-cap").textContent = "⌕";
@@ -798,6 +852,7 @@
           document.querySelector("#detail-count").textContent = `${searchResults.length} BINDS`;
           document.querySelector("#detail-eyebrow").textContent = "SEARCH";
           document.querySelector("#detail-subtitle").textContent = `“${searchQuery}” 匹配描述、按键、命令、submap 或 flags`;
+          announceDetail(`搜索结果，共 ${searchResults.length} 个绑定`);
           list.replaceChildren();
           if (!searchResults.length) {
             const empty = document.createElement("div");
@@ -826,6 +881,11 @@
           document.querySelector("#detail-subtitle").textContent = overview
             ? "键盘保持完整布局，并高亮所有 submap 的入口键。"
             : "这个 submap 没有可用绑定。";
+          announceDetail(
+            overview
+              ? `全部 submap，共 ${data.submaps.length} 个入口键`
+              : `${activeSubmap} 没有可用绑定`,
+          );
           list.replaceChildren();
           const empty = document.createElement("div");
           empty.className = "empty";
@@ -854,6 +914,11 @@
             : viewMode === "submap"
               ? `当前 submap ${activeSubmap} 中没有这个键的绑定`
               : "这个键目前没有绑定功能";
+        announceDetail(
+          found.length
+            ? `${title}，${found.length} 个绑定`
+            : `${title}，未绑定`,
+        );
         list.replaceChildren();
         if (!found.length) {
           const empty = document.createElement("div");
@@ -871,6 +936,10 @@
       }
 
       function select(target) {
+        if (viewMode === "search") {
+          document.querySelector("#bind-search").setAttribute("aria-expanded", "false");
+          document.querySelector("#bind-search").removeAttribute("aria-activedescendant");
+        }
         selectedTarget = target;
         renderDetail();
         if (window.matchMedia("(max-width: 960px)").matches) {
@@ -891,8 +960,16 @@
         document.querySelector("#stat-duplicate-wrap").classList.toggle("is-good", data.stats.duplicate_groups === 0);
       }
 
+      function updateKeyboardOverflowHint() {
+        const scroller = document.querySelector(".keyboard-scroll");
+        document.querySelector("#keyboard-overflow-hint").hidden =
+          scroller.scrollWidth <= scroller.clientWidth + 1;
+      }
+
       renderStats();
       renderKeyboard();
+      updateKeyboardOverflowHint();
+      window.addEventListener("resize", updateKeyboardOverflowHint);
       renderExtraKeys();
       renderMouseKeys();
       renderDiagnostics();
@@ -904,8 +981,25 @@
         if (event.key === "Escape") {
           applySearch("");
           searchInput.blur();
+        } else if (event.key === "ArrowDown" && searchResults.length) {
+          event.preventDefault();
+          if (selectedTarget !== null) {
+            selectedTarget = null;
+            searchInput.setAttribute("aria-expanded", "true");
+            renderDetail();
+          }
+          setActiveSearchResult(activeSearchResult + 1);
+        } else if (event.key === "ArrowUp" && searchResults.length) {
+          event.preventDefault();
+          if (selectedTarget !== null) {
+            selectedTarget = null;
+            searchInput.setAttribute("aria-expanded", "true");
+            renderDetail();
+          }
+          setActiveSearchResult(activeSearchResult - 1);
         } else if (event.key === "Enter" && searchResults.length) {
-          document.querySelector("#binding-list .binding-card")?.focus();
+          event.preventDefault();
+          commitSearchResult(searchResults[activeSearchResult]);
         }
       });
       document.querySelector("#search-clear").addEventListener("click", () => {

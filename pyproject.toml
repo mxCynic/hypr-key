@@ -1,6 +1,6 @@
 [project]
 name = "hypr-keymap"
-version = "1.6.0"
+version = "1.7.0"
 description = "Generate and audit an interactive Hyprland keymap"
 authors = [
     { name = "mxCynic", email = "mx1545914198@gmail.com" }
