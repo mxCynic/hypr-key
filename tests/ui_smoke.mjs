@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 const project = path.resolve(import.meta.dirname, "..");
-const fixture = path.join(project, "tests", "fixtures", "binds.lua");
+const fixture = path.join(project, "tests", "fixtures", "hyprland.lua");
 const temp = await mkdtemp(path.join(os.tmpdir(), "hypr-keymap-ui-"));
 const output = path.join(temp, "index.html");
 const diagnosticSource = path.join(temp, "diagnostics.lua");
@@ -237,6 +237,24 @@ try {
   assert(
     JSON.stringify(restoredEnglish.descriptions) === JSON.stringify(initialLanguage.descriptions),
     "binding descriptions changed when switching back to English",
+  );
+
+  const moduleResolution = await cdp.evaluate(`(() => {
+    [...document.querySelectorAll("[data-target]")].find(
+      (item) => item.dataset.target === "Q",
+    ).click();
+    return {
+      command: document.querySelector(".command code").textContent,
+      source: document.querySelector(".binding-meta span").textContent,
+    };
+  })()`);
+  assert(
+    moduleResolution.command === "kitty",
+    `required Lua module result was not used: ${moduleResolution.command}`,
+  );
+  assert(
+    moduleResolution.source.startsWith("configs/binds.lua:"),
+    `binding source is not the required module: ${moduleResolution.source}`,
   );
 
   const longKeyLabels = await cdp.evaluate(`(() => {
@@ -540,6 +558,7 @@ try {
   const diagnosticEnglish = await cdp.evaluate(`({
     titles: [...document.querySelectorAll(".diagnostic-title")].map((item) => item.textContent),
     messages: [...document.querySelectorAll(".diagnostic p")].map((item) => item.textContent),
+    locations: [...document.querySelectorAll(".diagnostic-meta span")].map((item) => item.textContent),
     descriptions: [...document.querySelectorAll(".binding-title")].map((item) => item.firstChild?.textContent || ""),
   })`);
   assert(
@@ -561,6 +580,11 @@ try {
   assert(
     JSON.stringify(diagnosticEnglish.descriptions) === JSON.stringify(["First action", "Second action"]),
     "diagnostic page did not preserve binding descriptions",
+  );
+  assert(
+    diagnosticEnglish.locations.length > 0
+      && diagnosticEnglish.locations.every((location) => location.startsWith("diagnostics.lua:")),
+    `diagnostic source locations are incorrect: ${JSON.stringify(diagnosticEnglish.locations)}`,
   );
 
   const diagnosticChinese = await cdp.evaluate(`(() => {

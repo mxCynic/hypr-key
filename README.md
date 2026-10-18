@@ -6,6 +6,19 @@ Generate a self-contained HTML audit of a Hyprland Lua key binding file.
 uv run hypr-keymap --open
 ```
 
+The default entry is `~/.config/hypr/hyprland.lua`. You only need to pass the
+Hyprland config entry, not `configs/binds.lua`:
+
+```bash
+hypr-keymap ~/.config/hypr/hyprland.lua --open
+```
+
+Local `require` calls are resolved while preserving the real source file and
+line number for every binding. Relative paths, dotted module names and glob
+imports such as `require("./configs/*")` are supported. Only Lua files below
+the config root are loadable, and module results are cached like normal Lua
+`require`.
+
 Install the command globally with:
 
 ```bash
@@ -37,9 +50,9 @@ Run the browser smoke test with:
 node tests/ui_smoke.mjs
 ```
 
-The smoke test is self-contained: `tests/fixtures/binds.lua` provides the
-submap and diagnostics scenarios without depending on a personal Hyprland
-configuration.
+The smoke test is self-contained: `tests/fixtures/hyprland.lua` and its
+`configs/` modules provide the submap and diagnostics scenarios without
+depending on a personal Hyprland configuration.
 
 Layout:
 

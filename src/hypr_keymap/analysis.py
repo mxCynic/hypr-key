@@ -421,6 +421,7 @@ def analyze(raw_bindings: list[RawBinding], source: Path) -> tuple[list[Binding]
                     "count": len(group),
                     "entries": [
                         {
+                            "source": binding.source,
                             "line": binding.line,
                             "description": binding.title,
                         }

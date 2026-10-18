@@ -15,28 +15,30 @@ from .render import print_diagnostics, render_html
 def usage_error(message: str) -> "NoReturn":
     raise HyprKeymapError(message)
 
-def discover_binds(explicit: str | None) -> Path:
+def discover_config(explicit: str | None) -> Path:
     if explicit:
         path = Path(explicit).expanduser()
         if not path.is_file():
-            usage_error(f"找不到按键配置文件: {path}")
+            usage_error(f"找不到 Hyprland Lua 配置文件: {path}")
         return path.resolve()
 
     home = Path.home()
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+    hypr_dirs = [
+        config_home / "hypr",
+        Path.cwd() / "hypr",
+    ]
     candidates = [
-        Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
-        / "hypr"
-        / "configs"
-        / "binds.lua",
-        Path.cwd() / "hypr" / "configs" / "binds.lua",
-        Path(__file__).resolve().parent.parent / "hypr" / "configs" / "binds.lua",
+        *(directory / "hyprland.lua" for directory in hypr_dirs),
+        *(directory / "configs" / "binds.lua" for directory in hypr_dirs),
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate.resolve()
 
     usage_error(
-        "找不到 binds.lua；请传入路径，例如: hypr-keymap ~/.config/hypr/configs/binds.lua"
+        "找不到 Hyprland Lua 入口；请传入路径，例如: "
+        "hypr-keymap ~/.config/hypr/hyprland.lua"
     )
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -53,9 +55,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "binds",
+        "config",
         nargs="?",
-        help="binds.lua 路径；默认查找 ~/.config/hypr/configs/binds.lua 或仓库路径",
+        help=(
+            "Hyprland Lua 入口路径；默认查找 ~/.config/hypr/hyprland.lua，"
+            "并兼容旧的 binds.lua 路径"
+        ),
     )
     parser.add_argument(
         "-o",
@@ -87,7 +92,7 @@ def default_output() -> Path:
 
 def _run(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    source = discover_binds(args.binds)
+    source = discover_config(args.config)
     raw_bindings = extract_bindings(source)
     bindings, diagnostics = analyze(raw_bindings, source)
     errors = sum(issue.severity == "error" for issue in diagnostics)

@@ -136,6 +136,11 @@
         .replace(/^no devices$/, () => t("device.none"))
         .replace(/^only: (.*)$/, (_, devices) => t("device.only", { devices }))
         .replace(/^except: (.*)$/, (_, devices) => t("device.except", { devices }));
+      const displaySource = (value) => {
+        const root = data.source_path.replace(/[\\/][^\\/]*$/, "");
+        if (root && value.startsWith(`${root}/`)) return value.slice(root.length + 1);
+        return value || data.source_name;
+      };
       const flagLabel = (flag) => {
         const key = `flag.${flag}`;
         return lookupTranslation(key) !== null ? t(key) : flag;
@@ -955,6 +960,7 @@
         if (Array.isArray(params.entries)) {
           params.details = params.entries
             .map((entry) => t("diagnostics.lineDescription", {
+              source: displaySource(entry.source),
               line: entry.line,
               description: entry.description || t("binding.noDescription"),
             }))
@@ -1013,9 +1019,12 @@
           message.textContent = localized.message;
           const meta = document.createElement("div");
           meta.className = "diagnostic-meta";
-          issue.lines.forEach((line) => {
+          const locations = issue.locations?.length
+            ? issue.locations
+            : issue.lines.map((line) => ({ source: data.source_name, line }));
+          locations.forEach(({ source, line }) => {
             const item = document.createElement("span");
-            item.textContent = `${data.source_name}:${line}`;
+            item.textContent = `${source}:${line}`;
             meta.append(item);
           });
           card.append(title, message, meta);
@@ -1214,7 +1223,8 @@
         const meta = document.createElement("div");
         meta.className = "binding-meta";
         meta.innerHTML = `<span></span><span></span>`;
-        meta.children[0].textContent = `${data.source_name}:${binding.line}`;
+        meta.children[0].textContent =
+          `${binding.source_display || displaySource(binding.source)}:${binding.line}`;
         const sourceLabel = binding.annotation_source === "description"
           ? t("binding.descriptionSource")
           : t("binding.missingDescriptionSource");

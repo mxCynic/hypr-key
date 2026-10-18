@@ -21,6 +21,14 @@ def render_html(
     diagnostics: list[Diagnostic],
     source: Path,
 ) -> str:
+    source_root = source.resolve().parent
+
+    def display_source(value: str) -> str:
+        try:
+            return str(Path(value).resolve().relative_to(source_root))
+        except ValueError:
+            return str(value)
+
     duplicate_groups = len({binding.duplicate_group for binding in bindings if binding.duplicate_group})
     errors = sum(issue.severity == "error" for issue in diagnostics)
     warnings = sum(issue.severity == "warning" for issue in diagnostics)
@@ -55,6 +63,20 @@ def render_html(
                 "params": issue.params,
                 "key": issue.key,
                 "binding_ids": issue.binding_ids,
+                "locations": [
+                    {
+                        "source": display_source(binding.source),
+                        "line": binding.line,
+                    }
+                    for binding in sorted(
+                        {
+                            (binding.source, binding.line): binding
+                            for binding in bindings
+                            if binding.id in issue.binding_ids
+                        }.values(),
+                        key=lambda binding: (binding.source, binding.line),
+                    )
+                ],
                 "lines": sorted(
                     {
                         binding.line
@@ -74,6 +96,7 @@ def render_html(
                 "combo": binding.combo,
                 "line": binding.line,
                 "source": binding.source,
+                "source_display": display_source(binding.source),
                 "action_path": binding.action_path,
                 "action_args": binding.action_args,
                 "title": binding.title,

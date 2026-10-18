@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from importlib.resources import files
@@ -15,16 +16,27 @@ def find_lua() -> str:
         path = shutil.which(command)
         if path:
             return path
-    raise HyprKeymapError("需要 Lua 解释器来读取 binds.lua；未找到 lua")
+    raise HyprKeymapError("需要 Lua 解释器来读取 Hyprland Lua 配置；未找到 lua")
 
 def extract_bindings(path: Path) -> list[RawBinding]:
     lua = find_lua()
+    config_root = path.parent.parent if path.parent.name == "configs" else path.parent
+    lua_files = sorted(
+        str(candidate.resolve())
+        for candidate in config_root.rglob("*.lua")
+        if candidate.is_file()
+    )
+    if any("\n" in candidate for candidate in lua_files):
+        raise HyprKeymapError("Lua 配置路径中包含换行符，无法传给提取器")
+    env = os.environ.copy()
+    env["HYPR_KEYMAP_LUA_FILES"] = "\n".join(lua_files)
     process = subprocess.run(
         [lua, "-", str(path)],
         input=LUA_EXTRACTOR,
         text=True,
         capture_output=True,
         check=False,
+        env=env,
     )
     if process.returncode != 0:
         detail = process.stderr.strip() or process.stdout.strip() or "未知 Lua 错误"

@@ -1,6 +1,7 @@
 local mainMod = "SUPER + "
+local functions = require("configs.function")
 
-hl.bind(mainMod .. "Q", hl.dsp.exec_cmd("kitty"), { description = "Open terminal" })
+hl.bind(mainMod .. "Q", hl.dsp.exec_cmd(functions.terminal), { description = "Open terminal" })
 hl.bind(mainMod .. "W", hl.dsp.window.float({ action = "toggle" }), { description = "Toggle floating window" })
 hl.bind(mainMod .. "E", hl.dsp.exec_cmd("file-manager"), { description = "Open file manager" })
 hl.bind(mainMod .. "A", hl.dsp.exec_cmd("volume-up"), { description = "音量 +10" })

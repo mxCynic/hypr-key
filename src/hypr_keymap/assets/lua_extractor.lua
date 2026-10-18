@@ -1,7 +1,59 @@
 local source_path = arg[1]
 if not source_path then
-  io.stderr:write("missing binds path\n")
+  io.stderr:write("missing Lua config path\n")
   os.exit(2)
+end
+
+local function normalize_path(path)
+  path = path:gsub("\\", "/")
+  local absolute = path:sub(1, 1) == "/"
+  local parts = {}
+  for part in path:gmatch("[^/]+") do
+    if part == ".." then
+      if #parts > 0 and parts[#parts] ~= ".." then
+        table.remove(parts)
+      elseif not absolute then
+        parts[#parts + 1] = part
+      end
+    elseif part ~= "." and part ~= "" then
+      parts[#parts + 1] = part
+    end
+  end
+  local normalized = table.concat(parts, "/")
+  if absolute then
+    return "/" .. normalized
+  end
+  return normalized
+end
+
+local function dirname(path)
+  return path:match("^(.*)/[^/]*$") or "."
+end
+
+local function basename(path)
+  return path:match("([^/]+)$") or path
+end
+
+local config_root = dirname(normalize_path(source_path))
+if basename(config_root) == "configs" then
+  config_root = dirname(config_root)
+end
+local allowed_files = {}
+local allowed_file_list = os.getenv("HYPR_KEYMAP_LUA_FILES") or ""
+for file in allowed_file_list:gmatch("[^\n]+") do
+  allowed_files[normalize_path(file)] = true
+end
+allowed_files[normalize_path(source_path)] = true
+
+local function lua_files_in(directory)
+  local files = {}
+  for file in pairs(allowed_files) do
+    if dirname(file) == directory then
+      files[#files + 1] = file
+    end
+  end
+  table.sort(files)
+  return files
 end
 
 local function json_escape(text)
@@ -90,11 +142,18 @@ local function proxy(path)
       return proxy(path .. "." .. tostring(key))
     end,
     __call = function(_, ...)
-      return {
+      local result = {
         __proxy_path = path,
         __proxy_args = { ... },
         __proxy_called = true,
       }
+      return setmetatable(result, {
+        __index = function()
+          return function()
+            return result
+          end
+        end,
+      })
     end,
   })
 end
@@ -206,31 +265,136 @@ setmetatable(hl, {
   end,
 })
 
-local environment = setmetatable({
-  hl = hl,
-  require = function()
-    return proxy("functions")
-  end,
-}, {
-  __index = _G,
-})
+local module_cache = {}
+local loading_modules = {}
 
-local chunk, load_error
-if _VERSION == "Lua 5.1" then
-  chunk, load_error = loadfile(source_path)
-  if chunk and setfenv then setfenv(chunk, environment) end
-else
-  chunk, load_error = loadfile(source_path, "t", environment)
+local function resolve_module_path(name, from_path)
+  local base
+  local absolute = name:sub(1, 1) == "/"
+  if absolute then
+    base = ""
+  elseif name:sub(1, 2) == "./" or name:sub(1, 3) == "../" then
+    base = dirname(from_path)
+  else
+    base = config_root
+  end
+
+  local relative
+  if name:match("%.lua$") then
+    relative = name
+  elseif name:find("/", 1, true) or absolute then
+    relative = name .. ".lua"
+  else
+    relative = name:gsub("%.", "/") .. ".lua"
+  end
+
+  if absolute then
+    return normalize_path(relative)
+  end
+  return normalize_path(base .. "/" .. relative)
 end
 
-if not chunk then
-  io.stderr:write("cannot load binds: " .. tostring(load_error) .. "\n")
-  os.exit(2)
+local function glob_to_lua_pattern(pattern)
+  local escaped = pattern:gsub("([%^%$%(%)%%%.%[%]%+%-])", "%%%1")
+  escaped = escaped:gsub("%*", ".*"):gsub("%?", ".")
+  return "^" .. escaped .. "$"
 end
 
-local ok, run_error = pcall(chunk)
+local function make_environment(file_path, require_module)
+  return setmetatable({
+    hl = hl,
+    require = function(name)
+      return require_module(name, file_path)
+    end,
+  }, {
+    __index = _G,
+  })
+end
+
+local function execute_file(file_path, require_module)
+  local environment = make_environment(file_path, require_module)
+  local chunk, load_error
+  if _VERSION == "Lua 5.1" then
+    chunk, load_error = loadfile(file_path)
+    if chunk and setfenv then
+      setfenv(chunk, environment)
+    end
+  else
+    chunk, load_error = loadfile(file_path, "t", environment)
+  end
+
+  if not chunk then
+    error("cannot load " .. file_path .. ": " .. tostring(load_error), 0)
+  end
+
+  local ok, result = pcall(chunk)
+  if not ok then
+    error("cannot execute " .. file_path .. ": " .. tostring(result), 0)
+  end
+  return result
+end
+
+local require_module
+
+local function load_module_path(file_path)
+  if module_cache[file_path] ~= nil then
+    return module_cache[file_path]
+  end
+  if loading_modules[file_path] then
+    return true
+  end
+
+  loading_modules[file_path] = true
+  local ok, result = pcall(execute_file, file_path, require_module)
+  loading_modules[file_path] = nil
+  if not ok then
+    error(result, 0)
+  end
+
+  if result == nil then
+    result = true
+  end
+  module_cache[file_path] = result
+  return module_cache[file_path]
+end
+
+require_module = function(name, from_path)
+  local resolved = resolve_module_path(name, from_path)
+  if resolved:find("[*?]") then
+    local cache_key = "glob:" .. resolved
+    if module_cache[cache_key] ~= nil then
+      return module_cache[cache_key]
+    end
+    local pattern = glob_to_lua_pattern(basename(resolved))
+    local directory = dirname(resolved)
+    local matches = {}
+    for _, file in ipairs(lua_files_in(directory)) do
+      if basename(file):match(pattern) then
+        matches[#matches + 1] = file
+      end
+    end
+    if #matches == 0 then
+      error("required glob matched no Lua files: " .. name .. " (" .. resolved .. ")", 0)
+    end
+
+    local result = {}
+    for _, file in ipairs(matches) do
+      local module_name = basename(file):gsub("%.lua$", "")
+      result[module_name] = load_module_path(file)
+    end
+    module_cache[cache_key] = result
+    return result
+  end
+
+  if not allowed_files[resolved] then
+    error("required Lua module was not found under the config root: " .. name, 0)
+  end
+  return load_module_path(resolved)
+end
+
+local ok, run_error = pcall(load_module_path, normalize_path(source_path))
 if not ok then
-  io.stderr:write("cannot execute binds: " .. tostring(run_error) .. "\n")
+  io.stderr:write(tostring(run_error) .. "\n")
   os.exit(2)
 end
 
