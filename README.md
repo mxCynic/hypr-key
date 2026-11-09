@@ -4,8 +4,6 @@ Generate an interactive, searchable, and diagnostic keyboard audit from a Hyprla
 
 `hypr-keymap` is designed for Hyprland setups that use Lua configuration files. It does not depend on a hard-coded keymap or manually maintained documentation. Binding descriptions come directly from Hyprland's native `description` field, while actions, commands, flags, submaps, and source locations are extracted from the real configuration.
 
-![hypr-keymap analyzing the Omarchy keymap](docs/omarchy-keymap.png)
-
 ## Why
 
 Hyprland Lua configurations are commonly split across multiple files with `require`. As a configuration grows, it becomes difficult to answer questions such as:
@@ -39,17 +37,17 @@ Supported import forms include:
 To avoid executing arbitrary modules, the extractor only loads Lua files
 discovered beneath the configured module roots.
 
-For layouts such as Omarchy, where modules live under both `~/.config` and
-`OMARCHY_PATH`, additional roots can be supplied explicitly:
+When modules are split across multiple directories, additional search roots
+can be supplied explicitly:
 
 ```bash
 hypr-keymap ~/.config/hypr/hyprland.lua \
   --module-root ~/.config \
-  --module-root /usr/share/omarchy
+  --module-root /path/to/shared-hyprland-modules
 ```
 
 When the entry is under `XDG_CONFIG_HOME`, that directory is added
-automatically. `OMARCHY_PATH` is also used automatically when it exists.
+automatically.
 
 ### Interactive keyboard audit
 
@@ -102,39 +100,6 @@ Use `--check` to run diagnostics in the terminal without generating HTML.
 
 The generated HTML embeds its styles, scripts, and binding data. It does not require a local server and does not access the network at runtime.
 
-## What it found in Omarchy
-
-The checked-in regression target is an Omarchy `quattro` snapshot pulled on
-2026-10-18 from commit
-[`a6dcc31b`](https://github.com/omacom/omarchy/tree/a6dcc31b6429fcf25e9e6bf90179f84c602cbf4e),
-release `v4.0.5`.
-
-`hypr-keymap` extracted 242 bindings and reported two potential duplicate
-groups:
-
-```text
-ALT + TAB
-  default/hypr/bindings/tiling.lua:55  Focus on next window
-  default/hypr/bindings/tiling.lua:57  Reveal active window on top
-
-ALT + SHIFT + TAB
-  default/hypr/bindings/tiling.lua:56  Focus on previous window
-  default/hypr/bindings/tiling.lua:58  Reveal active window on top
-```
-
-Omarchy intentionally stacks two dispatchers for each chord. The reverse
-chord has a known behavioral problem:
-
-- [Omarchy issue #7561: Alt+Shift+Tab cycles between only two windows](https://github.com/omacom/omarchy/issues/7561)
-- [Omarchy PR #8576: Cycle backwards through every window](https://github.com/omacom/omarchy/pull/8576)
-
-The issue explains that `cycle_next()` walks window z-order while
-`bring_to_top()` mutates the same order, causing reverse cycling to bounce
-between two windows. The proposed fix lowers the window being left before
-cycling backward.
-
-![Duplicate binding diagnostics for Omarchy](docs/omarchy-duplicates.png)
-
 ## Related projects
 
 Other Hyprland keybinding tools I found take different approaches:
@@ -152,8 +117,8 @@ diagnostics, and English/Chinese UI.
 See [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) for the GitHub/Reddit landscape,
 feature comparison with hyprKCS, and launch positioning.
 
-See [ROADMAP.md](ROADMAP.md) for the recorded project status, Omarchy findings,
-known limitations, and next release milestones.
+See [ROADMAP.md](ROADMAP.md) for the recorded project status, known
+limitations, and next release milestones.
 
 ## How it works
 
@@ -298,41 +263,3 @@ Default tool environment:
 ```text
 ~/.local/share/uv/tools/hypr-keymap/
 ```
-
-## Omarchy compatibility fixture
-
-The repository includes an unmodified Omarchy Hyprland configuration snapshot
-pinned to commit `a6dcc31b6429fcf25e9e6bf90179f84c602cbf4e`. Its source,
-license, and reproduction notes are recorded in
-`tests/fixtures/omarchy/quattro/UPSTREAM.md`.
-
-- Pulled: 2026-10-18
-- Branch: `quattro`
-- Release at capture time: `v4.0.5`
-
-Run the regression assertions:
-
-```bash
-uv run python tests/omarchy_snapshot.py
-```
-
-The snapshot keeps Omarchy's upstream layout. The test points directly at
-`config/hypr/hyprland.lua`, supplies `config` and `OMARCHY_PATH` as additional
-Lua module roots, and uses an isolated HOME. It does not copy or rewrite the
-configuration tree.
-
-Generate the audit report and open it in the default browser:
-
-```bash
-uv run python tests/omarchy_snapshot.py --open
-```
-
-Choose an output path explicitly:
-
-```bash
-uv run python tests/omarchy_snapshot.py \
-  -o /tmp/omarchy-keymap.html --open
-```
-
-Without `--open`, the script performs the extraction and validation without
-writing HTML unless `--output` is provided.
